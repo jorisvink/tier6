@@ -425,8 +425,10 @@ peer_purgatory_input(const void *data, size_t len, u_int64_t magic, void *udata)
 
 	if (sendto(peer->fd, data, len, 0,
 	    (const struct sockaddr *)&peer->addr, sizeof(peer->addr)) == -1) {
-		tier6_log(LOG_INFO,
-		    "[peer=%02x] sendto: %s", peer->id, errno_s);
+		if (errno != EAGAIN && errno != EWOULDBLOCK) {
+			tier6_log(LOG_INFO,
+			    "[peer=%02x] sendto: %s", peer->id, errno_s);
+		}
 	}
 }
 
@@ -456,8 +458,11 @@ peer_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 
 	if (sendto(peer->fd, data, len, 0,
 	    (struct sockaddr *)&sin, sizeof(sin)) == -1) {
-		tier6_log(LOG_INFO,
-		    "[peer=%02x] sendto: %s (cathedral)", peer->id, errno_s);
+		if (errno != EAGAIN && errno != EWOULDBLOCK) {
+			tier6_log(LOG_INFO,
+			    "[peer=%02x] sendto: %s (cathedral)",
+			    peer->id, errno_s);
+		}
 	}
 }
 
