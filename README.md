@@ -30,22 +30,8 @@ $ make
 ## Configuration
 
 You need a cathedral setup to run this, once you have the relevant
-files you can create a simple configuration:
-
-```
-runas user
-
-kek-id 01
-cs-id 0f056e10
-flock deadbeef00
-
-tapname 0f056e10
-cathedral 1.2.3.4:4500
-
-kek-path deadbeef00/kek-0x01
-cs-path deadbeef00/id-0f056e10
-cosk-path deadbeef00/cosk-0f056e10
-```
+files you can create a simple configuration. See the
+[example.conf](example configuration) in this repository.
 
 A community cathedral network can be found at
 <a href="https://reliquary.se">The Reliquary</a>.
