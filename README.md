@@ -14,6 +14,19 @@ code is undocumented at the moment.
 
 You don't want this yet.
 
+## Building
+
+Tier6 works on Linux and OpenBSD.
+
+You need libkyrka and pkg-config installed, plus whatever
+libs libkyrka needed (eg: libsodium).
+
+```
+$ make
+```
+
+**Note**: Use gmake on OpenBSD.
+
 ## Configuration
 
 You need a cathedral setup to run this, once you have the relevant
