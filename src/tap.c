@@ -53,7 +53,7 @@ tier6_tap_output(const void *data, size_t len)
 	PRECOND(len > sizeof(struct tier6_ether));
 
 	if (tier6_platform_tap_write(fd, data, len) == -1)
-		printf("failed to write to tap: %s\n", errno_s);
+		tier6_log(LOG_NOTICE, "tap write failed: %s", errno_s);
 }
 
 /*
