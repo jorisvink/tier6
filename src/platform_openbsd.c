@@ -111,7 +111,7 @@ int
 tier6_platform_tap_init(const char *name)
 {
 	char		path[128];
-	int		fd, idx, len, flags;
+	int		fd, idx, len;
 
 	PRECOND(name != NULL);
 
