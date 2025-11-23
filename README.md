@@ -9,10 +9,7 @@ traffic is dumped into a single tap interface. Return traffic is only
 sent to peers on which the destination MAC address has been seen as
 a source earlier, acting like a soft-switch.
 
-This is work in progress, no daemonization yet, no proper logging,
-code is undocumented at the moment.
-
-You don't want this yet.
+This is still a work in progress.
 
 ## Building
 
