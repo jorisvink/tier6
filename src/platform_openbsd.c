@@ -127,6 +127,8 @@ tier6_platform_tap_init(const char *name)
 	if (idx == 256)
 		fatal("unable to find free tap device");
 
+	tier6_log(LOG_INFO, "using tap device '%s'", path);
+
 	return (fd);
 }
 

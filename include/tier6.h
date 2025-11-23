@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <string.h>
+#include <syslog.h>
 
 #include <libkyrka/libkyrka.h>
 
@@ -33,7 +34,7 @@
 #define PRECOND(x)							\
 	do {								\
 		if (!(x)) {						\
-			fatal("precondition failed in %s:%s:%d\n",	\
+			fatal("precondition failed in %s:%s:%d",	\
 			    __FILE__, __func__, __LINE__);		\
 		}							\
 	} while (0)
@@ -41,7 +42,7 @@
 #define VERIFY(x)							\
 	do {								\
 		if (!(x)) {						\
-			fatal("verification failed in %s:%s:%d\n",	\
+			fatal("verification failed in %s:%s:%d",	\
 			    __FILE__, __func__, __LINE__);		\
 		}							\
 	} while (0)
@@ -120,7 +121,9 @@ struct tier6 {
 	struct sockaddr_in	cathedral;
 };
 
-extern struct tier6	*t6;
+/* from $(OBJDIR)/version.c */
+extern const char	*tier6_build_rev;
+extern const char	*tier6_build_date;
 
 /* src/config.c */
 void	tier6_config(const char *);
@@ -141,8 +144,13 @@ void	tier6_tap_output(const void *, size_t);
 
 /* src/tier6.c */
 void	tier6_socket_nonblock(int);
+void	tier6_log(int, const char *, ...)
+	    __attribute__((format (printf, 2, 3)));
+void	tier6_logv(int, const char *, va_list);
 void	fatal(const char *, ...) __attribute__((format (printf, 1, 2)))
 	    __attribute__((noreturn));
+
+extern struct tier6	*t6;
 
 /* platform bits. */
 void	tier6_platform_init(void);

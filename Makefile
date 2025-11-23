@@ -2,6 +2,7 @@
 
 CC?=cc
 OBJDIR?=obj
+VERSION=$(OBJDIR)/version.c
 
 BIN=tier6
 
@@ -44,8 +45,9 @@ endif
 all: $(BIN)
 
 OBJS=	$(SRC:%.c=$(OBJDIR)/%.o)
+OBJS+=	$(OBJDIR)/version.o
 
-$(BIN): $(OBJDIR) $(OBJS)
+$(BIN): $(OBJDIR) $(OBJS) $(VERSION)
 	$(CC) $(OBJS) $(LDFLAGS) -o $@
 
 $(OBJDIR):
@@ -55,7 +57,27 @@ $(OBJDIR)/%.o: %.c
 	@mkdir -p $(shell dirname $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+src/tier6.c: $(VERSION)
+
+$(VERSION): $(OBJDIR) force
+	@if [ -f RELEASE ]; then \
+		printf "const char *tier6_build_rev = \"%s\";\n" \
+		    `cat RELEASE` > $(VERSION); \
+	elif [ -d .git ]; then \
+		GIT_REVISION=`git rev-parse --short=8 HEAD`; \
+		GIT_BRANCH=`git rev-parse --abbrev-ref HEAD`; \
+		rm -f $(VERSION); \
+		printf "const char *tier6_build_rev = \"%s-%s\";\n" \
+		    $$GIT_BRANCH $$GIT_REVISION > $(VERSION); \
+	else \
+		echo "No version information found (no .git or RELEASE)"; \
+		exit 1; \
+	fi
+	@printf "const char *tier6_build_date = \"%s\";\n" \
+	    `date +"%Y-%m-%d"` >> $(VERSION);
+
 clean:
+	rm -f $(VERSION)
 	rm -rf $(OBJDIR) $(BIN)
 
 .PHONY: all clean force

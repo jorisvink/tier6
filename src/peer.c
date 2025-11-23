@@ -79,7 +79,8 @@ tier6_peer_state(u_int8_t id, u_int8_t state)
 	PRECOND(id >= 1);
 
 	if (state != 0 && state != 1) {
-		printf("upstream sent wrong state (%u) for %02x\n", state, id);
+		tier6_log(LOG_NOTICE,
+		    "[cathedral] sent wrong state (%u) for %02x", state, id);
 		return;
 	}
 
@@ -109,18 +110,21 @@ tier6_peer_update(void)
 
 	LIST_FOREACH(peer, &peers, list) {
 		if (kyrka_key_manage(peer->ctx) == -1) {
-			printf("kyrka_key_manage: %d\n",
-			    kyrka_last_error(peer->ctx));
+			tier6_log(LOG_NOTICE,
+			    "[peer=%02x] kyrka_key_manage: %d",
+			    peer->id, kyrka_last_error(peer->ctx));
 		}
 
 		if (kyrka_cathedral_notify(peer->ctx) == -1) {
-			printf("kyrka_cathedral_notify: %d\n",
-			    kyrka_last_error(peer->ctx));
+			tier6_log(LOG_NOTICE,
+			    "[peer=%02x] kyrka_cathedral_notify: %d",
+			    peer->id, kyrka_last_error(peer->ctx));
 		}
 
 		if (kyrka_cathedral_nat_detection(peer->ctx) == -1) {
-			printf("kyrka_cathedral_nat_detection: %d\n",
-			    kyrka_last_error(peer->ctx));
+			tier6_log(LOG_NOTICE,
+			    "[peer=%02x] kyrka_cathedral_nat_detection: %d",
+			    peer->id, kyrka_last_error(peer->ctx));
 		}
 
 		peer_mac_prune(peer);
@@ -154,7 +158,8 @@ tier6_peer_output(const void *pkt, size_t len)
 	case TIER6_ETHER_TYPE_IPV6:
 		break;
 	default:
-		printf("ignoring unknown proto %04x\n", proto);
+		tier6_log(LOG_NOTICE,
+		    "[peer] ignoring unknown proto %04x", proto);
 		return;
 	}
 	
@@ -163,8 +168,9 @@ tier6_peer_output(const void *pkt, size_t len)
 			continue;
 
 		if (kyrka_heaven_input(peer->ctx, pkt, len) == -1) {
-			printf("kyrka_heaven_input: %d\n",
-			    kyrka_last_error(peer->ctx));
+			tier6_log(LOG_NOTICE,
+			    "[peer=%02x] kyrka_heaven_input: %d",
+			    peer->id, kyrka_last_error(peer->ctx));
 		}
 	}
 }
@@ -229,7 +235,8 @@ peer_create(u_int8_t id)
 	}
 
 	LIST_INSERT_HEAD(&peers, peer, list);
-	printf("peer %02x created\n", id);
+
+	tier6_log(LOG_INFO, "[peer=%02x] tunnel created", id);
 }
 
 /*
@@ -249,7 +256,8 @@ peer_delete(u_int8_t id)
 	}
 
 	if (peer == NULL) {
-		printf("peer %02x does not exist\n", id);
+		tier6_log(LOG_INFO,
+		    "[peer=%02x] peer does not exist for removal", id);
 		return;
 	}
 
@@ -263,7 +271,7 @@ peer_delete(u_int8_t id)
 	close(peer->fd);
 	free(peer);
 
-	printf("peer %02x removed\n", id);
+	tier6_log(LOG_INFO, "[peer=%02x] tunnel removed", id);
 }
 
 /*
@@ -309,8 +317,9 @@ peer_io_read(struct tier6_peer *peer)
 			continue;
 
 		if (kyrka_purgatory_input(peer->ctx, buf, ret) == -1) {
-			printf("kyrka_purgatory_input: %d\n",
-			    kyrka_last_error(peer->ctx));
+			tier6_log(LOG_NOTICE,
+			    "[peer=%02x] kyrka_purgatory_input: %d",
+			    peer->id, kyrka_last_error(peer->ctx));
 		}
 	}
 }
@@ -332,18 +341,20 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 
 	switch (evt->type) {
 	case KYRKA_EVENT_KEYS_INFO:
-		printf("%02x tx=%08x rx=%08x\n",
+		tier6_log(LOG_INFO, "[peer=%02x] tx=%08x rx=%08x",
 		    peer->id, evt->keys.tx_spi, evt->keys.rx_spi);
 		break;
 	case KYRKA_EVENT_EXCHANGE_INFO:
-		printf("%02x exchange: %s\n", peer->id, evt->exchange.reason);
+		tier6_log(LOG_INFO, "[peer=%02x] exchange: %s",
+		    peer->id, evt->exchange.reason);
 		break;
 	case KYRKA_EVENT_AMBRY_RECEIVED:
-		printf("%02x ambry generation %08x\n",
+		tier6_log(LOG_INFO, "[peer=%02x] ambry generation %08x",
 		    peer->id, evt->ambry.generation);
 		break;
 	case KYRKA_EVENT_LOGMSG:
-		printf("%02x log %s\n", peer->id, evt->logmsg.log);
+		tier6_log(LOG_INFO, "[peer=%02x] log: %s",
+		    peer->id, evt->logmsg.log);
 		break;
 	case KYRKA_EVENT_PEER_DISCOVERY:
 		in.s_addr = evt->peer.ip;
@@ -357,13 +368,16 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 			    peer->addr.sin_addr.s_addr &&
 			    peer->cathedral.sin_port !=
 			    peer->addr.sin_port) {
-				printf("%02x p2p discovery %s:%u", peer->id,
-				    inet_ntoa(in), htons(evt->peer.port));
+				tier6_log(LOG_INFO,
+				    "[peer=%02x] p2p discovery %s:%u",
+				    peer->id, inet_ntoa(in),
+				    htons(evt->peer.port));
 			}
 		}
 		break;
 	default:
-		printf("%02x event %u\n", peer->id, evt->type);
+		tier6_log(LOG_NOTICE, "[peer=%02x] unknown event %u",
+		    peer->id, evt->type);
 		break;
 	}
 }
@@ -410,8 +424,10 @@ peer_purgatory_input(const void *data, size_t len, u_int64_t magic, void *udata)
 	peer = udata;
 
 	if (sendto(peer->fd, data, len, 0,
-	    (const struct sockaddr *)&peer->addr, sizeof(peer->addr)) == -1)
-		printf("sendto: %s\n", errno_s);
+	    (const struct sockaddr *)&peer->addr, sizeof(peer->addr)) == -1) {
+		tier6_log(LOG_INFO,
+		    "[peer=%02x] sendto: %s", peer->id, errno_s);
+	}
 }
 
 /*
@@ -439,8 +455,10 @@ peer_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 	sin.sin_addr.s_addr = peer->cathedral.sin_addr.s_addr;
 
 	if (sendto(peer->fd, data, len, 0,
-	    (struct sockaddr *)&sin, sizeof(sin)) == -1)
-		printf("sendto: %s\n", errno_s);
+	    (struct sockaddr *)&sin, sizeof(sin)) == -1) {
+		tier6_log(LOG_INFO,
+		    "[peer=%02x] sendto: %s (cathedral)", peer->id, errno_s);
+	}
 }
 
 /*
@@ -476,9 +494,10 @@ peer_mac_register(struct tier6_peer *peer,
 
 	LIST_INSERT_HEAD(&peer->macs, mac, list);
 
-	printf("%02x:%02x:%02x:%02x:%02x:%02x disovered on %02x\n",
-	    mac->addr[0], mac->addr[1], mac->addr[2],
-	    mac->addr[3], mac->addr[4], mac->addr[5], peer->id);
+	tier6_log(LOG_INFO,
+	    "[peer=%02x] %02x:%02x:%02x:%02x:%02x:%02x disovered",
+	    peer->id, mac->addr[0], mac->addr[1], mac->addr[2],
+	    mac->addr[3], mac->addr[4], mac->addr[5]);
 }
 
 /*
@@ -521,10 +540,10 @@ peer_mac_prune(struct tier6_peer *peer)
 			continue;
 
 		if ((t6->now - mac->age) >= PEER_MAC_AGE_MAX) {
-			printf("%02x:%02x:%02x:%02x:%02x:%02x gone on %02x\n",
-			    mac->addr[0], mac->addr[1], mac->addr[2],
-			    mac->addr[3], mac->addr[4], mac->addr[5],
-			    peer->id);
+			tier6_log(LOG_INFO,
+			    "[peer=%02x] %02x:%02x:%02x:%02x:%02x:%02x gone",
+			    peer->id, mac->addr[0], mac->addr[1], mac->addr[2],
+			    mac->addr[3], mac->addr[4], mac->addr[5]);
 			LIST_REMOVE(mac, list);
 			free(mac);
 		}

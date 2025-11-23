@@ -104,7 +104,7 @@ tier6_discovery_update(void)
 	next_notify = t6->now + 1;
 
 	if (kyrka_cathedral_liturgy(liturgy, NULL, 0) == -1) {
-		printf("kyrka_cathedral_notify: %d\n",
+		tier6_log(LOG_NOTICE, "discovery kyrka_cathedral_notify: %d",
 		    kyrka_last_error(liturgy));
 	}
 }
@@ -146,7 +146,8 @@ discovery_io_read(void)
 			continue;
 
 		if (kyrka_purgatory_input(liturgy, buf, ret) == -1) {
-			printf("kyrka_purgatory_input: %d\n",
+			tier6_log(LOG_NOTICE,
+			    "discovery kyrka_purgatory_input: %d",
 			    kyrka_last_error(liturgy));
 		}
 	}
@@ -171,7 +172,8 @@ discovery_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 			tier6_peer_state(idx, evt->liturgy.peers[idx]);
 		break;
 	default:
-		printf("%s: %u\n", __func__, evt->type);
+		tier6_log(LOG_NOTICE,
+		    "discovery received unexpected event %u", evt->type);
 		break;
 	}
 }
@@ -188,5 +190,5 @@ discovery_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 
 	if (sendto(fd, data, len, 0,
 	    (const struct sockaddr *)&addr, sizeof(addr)) == -1)
-		printf("sendto: %s\n", errno_s);
+		tier6_log(LOG_NOTICE, "discovery sendto: %s", errno_s);
 }

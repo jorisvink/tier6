@@ -130,7 +130,9 @@ tier6_platform_tap_init(const char *tap)
 		fatal("tap interface name '%s' too large", tap);
 
 	if (ioctl(fd, TUNSETIFF, &ifr) == -1)
-		fatal("failed to create tunnel device %s: %s", tap, errno_s);
+		fatal("failed to create tap device %s: %s", tap, errno_s);
+
+	tier6_log(LOG_INFO, "interface '%s' created", tap);
 
 	return (fd);
 }
