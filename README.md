@@ -33,6 +33,8 @@ You need a cathedral setup to run this, once you have the relevant
 files you can create a simple configuration:
 
 ```
+runas user
+
 kek-id 01
 cs-id 0f056e10
 flock deadbeef00
