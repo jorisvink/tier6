@@ -36,9 +36,8 @@ ifeq ("$(OSNAME)", "linux")
 	SRC+=src/platform_linux.c
 	CFLAGS+=-DPLATFORM_LINUX
 	CFLAGS+=-D_GNU_SOURCE=1 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2
-else ifeq ("$(OSNAME)", "darwin")
-	CFLAGS+=-DPLATFORM_DARWIN
 else ifeq ("$(OSNAME)", "openbsd")
+	SRC+=src/platform_openbsd.c
 	CFLAGS+=-DPLATFORM_OPENBSD
 endif
 

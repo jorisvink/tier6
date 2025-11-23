@@ -450,11 +450,13 @@ peer_mac_check(struct tier6_peer *peer, const u_int8_t *addr, size_t len)
 static void
 peer_mac_prune(struct tier6_peer *peer)
 {
-	struct tier6_mac	*mac;
+	struct tier6_mac	*mac, *next;
 
 	PRECOND(peer != NULL);
 
-	LIST_FOREACH(mac, &peer->macs, list) {
+	for (mac = LIST_FIRST(&peer->macs); mac != NULL; mac = next) {
+		next = LIST_NEXT(mac, list);
+
 		if (mac->fixed)
 			continue;
 
