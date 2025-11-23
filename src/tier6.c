@@ -149,10 +149,11 @@ main(int argc, char **argv)
 			}
 		}
 
+		tier6_platform_io_wait();
+
 		(void)clock_gettime(CLOCK_MONOTONIC, &ts);
 		t6->now = ts.tv_sec;
 
-		tier6_platform_io_wait();
 		tier6_peer_update();
 		tier6_discovery_update();
 	}

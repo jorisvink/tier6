@@ -35,6 +35,7 @@ static void	peer_delete(u_int8_t);
 static void	peer_io_event(void *);
 static void	peer_io_read(struct tier6_peer *);
 
+static void	peer_heartbeat(struct tier6_peer *);
 static void	peer_mac_prune(struct tier6_peer *);
 static int	peer_mac_check(struct tier6_peer *, const u_int8_t *, size_t);
 static void	peer_mac_register(struct tier6_peer *,
@@ -132,6 +133,7 @@ tier6_peer_update(void)
 			    peer->id, kyrka_last_error(peer->ctx));
 		}
 
+		peer_heartbeat(peer);
 		peer_mac_prune(peer);
 	}
 }
@@ -198,6 +200,7 @@ peer_create(u_int8_t id)
 	LIST_INIT(&peer->macs);
 
 	peer->id = id;
+	peer->hb_frequency = 5;
 	peer->io.handle = peer_io_event;
 
 	peer_mac_register(peer, &broadcast, 1);
@@ -377,6 +380,9 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 				    "[peer=%02x] p2p discovery %s:%u",
 				    peer->id, inet_ntoa(in),
 				    htons(evt->peer.port));
+
+				peer->hb_ticks = 15;
+				peer->hb_frequency = 1;
 			}
 		}
 		break;
@@ -397,6 +403,7 @@ peer_heaven_input(const void *data, size_t len, u_int64_t magic, void *udata)
 {
 	const struct tier6_ether	*eth;
 	struct tier6_peer		*peer;
+	u_int16_t			proto;
 
 	PRECOND(data != NULL);
 	PRECOND(len > 0);
@@ -408,6 +415,17 @@ peer_heaven_input(const void *data, size_t len, u_int64_t magic, void *udata)
 		return;
 
 	eth = data;
+	proto = ntohs(eth->proto);
+
+	switch (proto) {
+	case TIER6_ETHER_TYPE_ARP:
+	case TIER6_ETHER_TYPE_VLAN:
+	case TIER6_ETHER_TYPE_IPV4:
+	case TIER6_ETHER_TYPE_IPV6:
+		break;
+	default:
+		return;
+	}
 
 	peer_mac_register(peer, eth, 0);
 	tier6_tap_output(data, len);
@@ -468,6 +486,37 @@ peer_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 			    "[peer=%02x] sendto: %s (cathedral)",
 			    peer->id, errno_s);
 		}
+	}
+}
+
+/*
+ * If needed send a heartbeat packet to our peer, this is mostly done
+ * to keep any NAT states alive if we are in P2P mode.
+ */
+static void
+peer_heartbeat(struct tier6_peer *peer)
+{
+	struct tier6_ether	eth;
+
+	PRECOND(peer != NULL);
+
+	if (peer->hb_next > 0 && t6->now < peer->hb_next)
+		return;
+
+	peer->hb_next = t6->now + peer->hb_frequency;
+
+	if (peer->hb_ticks > 0) {
+		peer->hb_ticks--;
+		if (peer->hb_ticks == 0)
+			peer->hb_frequency = 5;
+	}
+
+	memset(&eth, 0, sizeof(eth));
+	eth.proto = htons(TIER6_ETHER_TYPE_HEARTBEAT);
+
+	if (kyrka_heaven_input(peer->ctx, &eth, sizeof(eth)) == -1) {
+		tier6_log(LOG_NOTICE, "[peer=%02x] kyrka_heaven_input: %d",
+		    peer->id, kyrka_last_error(peer->ctx));
 	}
 }
 

@@ -47,16 +47,21 @@
 		}							\
 	} while (0)
 
-/*
- * An ethernet frame header.
- */
+/* Length of an ethernet MAC address. */
 #define TIER6_ETHERNET_MAC_LEN		6
 
+/* The ethernet protocols we will allow. */
 #define TIER6_ETHER_TYPE_VLAN		0x8100
 #define TIER6_ETHER_TYPE_ARP		0x0806
 #define TIER6_ETHER_TYPE_IPV4		0x0800
 #define TIER6_ETHER_TYPE_IPV6		0x86dd
 
+/* Special ethernet type for heartbeats. */
+#define TIER6_ETHER_TYPE_HEARTBEAT	0xdead
+
+/*
+ * An ethernet frame header.
+ */
 struct tier6_ether {
 	u_int8_t	dst[TIER6_ETHERNET_MAC_LEN];
 	u_int8_t	src[TIER6_ETHERNET_MAC_LEN];
@@ -95,6 +100,10 @@ struct tier6_peer {
 
 	struct sockaddr_in		addr;
 	struct sockaddr_in		cathedral;
+
+	time_t				hb_next;
+	u_int32_t			hb_ticks;
+	u_int32_t			hb_frequency;
 
 	KYRKA				*ctx;
 
