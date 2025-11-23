@@ -1,9 +1,18 @@
 # tier6
 
-Build a global ethernet network using sanctum its p2p e2ee
-tunnel infrastructure.
+Build a global ethernet network using sanctum p2p e2ee tunnels.
 
-This is work in progress, no daemonization yet, no proper logging yet.
+Tier6 uses a sanctum cathedral infrastructure to autodiscover peers
+in its same network and establish p2p e2ee tunnels to each peer
+in full mesh mode. All incoming traffic is dumped into a single
+tap interface. Return traffic is only sent to peers on which
+the destination MAC address has been seen as a source earlier,
+acting like a soft-switch.
+
+This is work in progress, no daemonization yet, no proper logging,
+code is undocumented at the moment.
+
+You don't want this yet.
 
 ## Configuration
 
@@ -26,5 +35,5 @@ cosk-path deadbeef00/cosk-0f056e10
 ## Running
 
 ```
-# tier6 my.conf
+# tier6 t6.conf
 ```
