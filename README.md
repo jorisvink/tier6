@@ -31,7 +31,7 @@ $ make
 
 You need a cathedral setup to run this, once you have the relevant
 files you can create a simple configuration. See the
-[example.conf](example configuration) in this repository.
+[example configuration](example.conf) in this repository.
 
 A community cathedral network can be found at
 <a href="https://reliquary.se">The Reliquary</a>.
