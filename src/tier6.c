@@ -17,6 +17,8 @@
 #include <sys/types.h>
 
 #include <fcntl.h>
+#include <grp.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,6 +50,10 @@ static void
 usage(void)
 {
 	printf("tier6 [-d] [config]\n");
+	printf("\n");
+	printf("options:\n");
+	printf("  -d  Daemonize the process, running in the background.\n");
+	printf("  -h  This help text.\n");
 	exit(1);
 }
 
@@ -71,7 +77,7 @@ main(int argc, char **argv)
 	sigset_t		sigset;
 	int			ch, running;
 
-	while ((ch = getopt(argc, argv, "dv")) != -1) {
+	while ((ch = getopt(argc, argv, "dhv")) != -1) {
 		switch (ch) {
 		case 'd':
 			foreground = 0;
@@ -79,6 +85,8 @@ main(int argc, char **argv)
 		case 'v':
 			version();
 			break;
+		case 'h':
+			/* FALLTHROUGH */
 		default:
 			usage();
 			break;
@@ -122,6 +130,9 @@ main(int argc, char **argv)
 	sigdelset(&sigset, SIGTERM);
 	(void)sigprocmask(SIG_BLOCK, &sigset, NULL);
 
+	tzset();
+	tier6_platform_sandbox();
+
 	running = 1;
 	tier6_log(LOG_INFO, "up and running");
 
@@ -149,6 +160,25 @@ main(int argc, char **argv)
 	tier6_log(LOG_INFO, "shutting down");
 
 	return (0);
+}
+
+/*
+ * Drop privileges to the configured runas user.
+ */
+void
+tier6_drop_user(void)
+{
+	struct passwd		*pw;
+
+	PRECOND(t6->runas != NULL);
+
+	if ((pw = getpwnam(t6->runas)) == NULL)
+		fatal("failed to find runas '%s' (%s)", t6->runas, errno_s);
+
+	if (setgroups(1, &pw->pw_gid) == -1 ||
+	    setgid(pw->pw_gid) == -1 || setegid(pw->pw_gid) == -1 ||
+	    setuid(pw->pw_uid) == -1 || seteuid(pw->pw_uid) == -1)
+		fatal("failed to drop privileges (%s)", errno_s);
 }
 
 /*

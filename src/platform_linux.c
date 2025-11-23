@@ -50,6 +50,15 @@ tier6_platform_init(void)
 }
 
 /*
+ * Apply sandboxing to our process.
+ */
+void
+tier6_platform_sandbox(void)
+{
+	tier6_drop_user();
+}
+
+/*
  * Wait for any i/o to occur on previously registered sockets.
  * The maximum wait time is 1 second.
  */

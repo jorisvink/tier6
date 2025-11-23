@@ -110,6 +110,7 @@ struct tier6 {
 	u_int32_t		cs_id;
 	u_int8_t		kek_id;
 
+	char			*runas;
 	char			*tapname;
 
 	char			*cs_path;
@@ -143,6 +144,7 @@ void	tier6_tap_init(void);
 void	tier6_tap_output(const void *, size_t);
 
 /* src/tier6.c */
+void	tier6_drop_user(void);
 void	tier6_socket_nonblock(int);
 void	tier6_log(int, const char *, ...)
 	    __attribute__((format (printf, 2, 3)));
@@ -154,6 +156,7 @@ extern struct tier6	*t6;
 
 /* platform bits. */
 void	tier6_platform_init(void);
+void	tier6_platform_sandbox(void);
 
 int	tier6_platform_tap_init(const char *);
 ssize_t	tier6_platform_tap_read(int, void *, size_t);

@@ -31,6 +31,7 @@
 
 static void	config_check_file(const char *);
 
+static void	config_parse_runas(char *);
 static void	config_parse_flock(char *);
 static void	config_parse_cs_id(char *);
 static void	config_parse_kek_id(char *);
@@ -53,6 +54,7 @@ static struct {
 	{ "kek-id",	config_parse_kek_id },
 	{ "kek-path",	config_parse_kek_path },
 
+	{ "runas",	config_parse_runas },
 	{ "flock",	config_parse_flock },
 	{ "tapname",	config_parse_tapname },
 	{ "cathedral",	config_parse_cathedral },
@@ -103,6 +105,33 @@ tier6_config(const char *path)
 	}
 
 	fclose(fp);
+
+	if (t6->cs_id == 0)
+		fatal("no cs-id was specified in the configuration");
+
+	if (t6->kek_id == 0)
+		fatal("no kek-id was specified in the configuration");
+
+	if (t6->flock == 0)
+		fatal("no flock was specified in the configuration");
+
+	if (t6->cathedral.sin_addr.s_addr == 0)
+		fatal("no cathedral was specified in the configuration");
+
+	if (t6->runas == NULL)
+		fatal("no runas was specified in the configuration");
+
+	if (t6->tapname == NULL)
+		fatal("no tapname was specified in the configuration");
+
+	if (t6->cs_path == NULL)
+		fatal("no cs-path was specified in the configuration");
+
+	if (t6->kek_path == NULL)
+		fatal("no kek-path was specified in the configuration");
+
+	if (t6->cosk_path == NULL)
+		fatal("no cosk-path was specified in the configuration");
 }
 
 /*
@@ -157,6 +186,21 @@ config_parse_kek_id(char *opt)
 
 	if (sscanf(opt, "%hhx", &t6->kek_id) != 1)
 		fatal("kek-id <hex> (8-bit number)");
+}
+
+/*
+ * Parse the runas configuration option.
+ */
+static void
+config_parse_runas(char *opt)
+{
+	PRECOND(opt != NULL);
+
+	if (t6->runas != NULL)
+		fatal("runas already specified");
+
+	if ((t6->runas = strdup(opt)) == NULL)
+		fatal("strdup");
 }
 
 /*
