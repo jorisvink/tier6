@@ -46,8 +46,13 @@ static void	peer_kyrka_send(const void *, size_t, u_int64_t, void *);
 static void	peer_heaven_input(const void *, size_t, u_int64_t, void *);
 static void	peer_purgatory_input(const void *, size_t, u_int64_t, void *);
 
+/* Our list of active peers. */
 static LIST_HEAD(, tier6_peer)		peers;
+
+/* The broadcast address is added to all tunnels. */
 static struct tier6_ether		broadcast;
+
+/* The next time we should update peers. */
 static time_t				next_update;
 
 /*
