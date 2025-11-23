@@ -2,12 +2,12 @@
 
 Build a global ethernet network using sanctum p2p e2ee tunnels.
 
-Tier6 uses a sanctum cathedral infrastructure to autodiscover peers
-in its same network and establish p2p e2ee tunnels to each peer
-in full mesh mode. All incoming traffic is dumped into a single
-tap interface. Return traffic is only sent to peers on which
-the destination MAC address has been seen as a source earlier,
-acting like a soft-switch.
+Tier6 uses a <a href="https://github.com/jorisvink/sanctum">sanctum</a>
+cathedral infrastructure to autodiscover peers in its same network and
+establish p2p e2ee tunnels to each peer in full mesh mode. All incoming
+traffic is dumped into a single tap interface. Return traffic is only
+sent to peers on which the destination MAC address has been seen as
+a source earlier, acting like a soft-switch.
 
 This is work in progress, no daemonization yet, no proper logging,
 code is undocumented at the moment.
@@ -18,8 +18,8 @@ You don't want this yet.
 
 Tier6 works on Linux and OpenBSD.
 
-You need libkyrka and pkg-config installed, plus whatever
-libs libkyrka needed (eg: libsodium).
+You need <a href="https://github.com/jorisvink/libkyrka">libkyrka</a> and
+pkg-config installed, plus whatever libs libkyrka needed (eg: libsodium).
 
 ```
 $ make
@@ -44,6 +44,9 @@ kek-path deadbeef00/kek-0x01
 cs-path deadbeef00/id-0f056e10
 cosk-path deadbeef00/cosk-0f056e10
 ```
+
+A community cathedral network can be found at
+<a href="https://reliquary.se">The Reliquary</a>.
 
 ## Running
 
