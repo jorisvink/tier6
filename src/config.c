@@ -60,6 +60,10 @@ static struct {
 	{ NULL, NULL },
 };
 
+/*
+ * Parse our configuration file, setting up everything we need
+ * in our global context so we can get up and running.
+ */
 void
 tier6_config(const char *path)
 {
@@ -101,6 +105,11 @@ tier6_config(const char *path)
 	fclose(fp);
 }
 
+/*
+ * Helper function to read a single line from our configuration. We skip
+ * the initial whitespaces and return a pointer to the first non-whitespace
+ * character to the caller.
+ */
 static char *
 config_read_line(FILE *fp, char *buf, size_t buflen)
 {
@@ -126,6 +135,9 @@ config_read_line(FILE *fp, char *buf, size_t buflen)
 	return (ptr);
 }
 
+/*
+ * Parse the cs-id configuration option.
+ */
 static void
 config_parse_cs_id(char *opt)
 {
@@ -135,6 +147,9 @@ config_parse_cs_id(char *opt)
 		fatal("cs-id <hex> (32-bit number)");
 }
 
+/*
+ * Parse the kek-id configuration option.
+ */
 static void
 config_parse_kek_id(char *opt)
 {
@@ -144,6 +159,9 @@ config_parse_kek_id(char *opt)
 		fatal("kek-id <hex> (8-bit number)");
 }
 
+/*
+ * Parse the flock configuration option.
+ */
 static void
 config_parse_flock(char *opt)
 {
@@ -153,6 +171,9 @@ config_parse_flock(char *opt)
 		fatal("flock <hex> (64-bit number)");
 }
 
+/*
+ * Parse the tapname configuration option.
+ */
 static void
 config_parse_tapname(char *opt)
 {
@@ -165,6 +186,9 @@ config_parse_tapname(char *opt)
 		fatal("strdup failed");
 }
 
+/*
+ * Parse the cs-path configuration option.
+ */
 static void
 config_parse_cs_path(char *opt)
 {
@@ -179,6 +203,9 @@ config_parse_cs_path(char *opt)
 		fatal("strdup failed");
 }
 
+/*
+ * Parse the kek-path configuration option.
+ */
 static void
 config_parse_kek_path(char *opt)
 {
@@ -193,6 +220,9 @@ config_parse_kek_path(char *opt)
 		fatal("strdup failed");
 }
 
+/*
+ * Parse the cosk-path configuration option.
+ */
 static void
 config_parse_cosk_path(char *opt)
 {
@@ -207,6 +237,9 @@ config_parse_cosk_path(char *opt)
 		fatal("strdup failed");
 }
 
+/*
+ * Parse the cathedral configuration option.
+ */
 static void
 config_parse_cathedral(char *opt)
 {
@@ -229,6 +262,9 @@ config_parse_cathedral(char *opt)
 	t6->cathedral.sin_port = htons(t6->cathedral.sin_port);
 }
 
+/*
+ * Helper function to check read-access to the given path.
+ */
 static void
 config_check_file(const char *path)
 {

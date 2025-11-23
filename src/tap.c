@@ -16,7 +16,6 @@
 
 #include <sys/types.h>
 
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -24,56 +23,60 @@
 
 static void	tap_io_event(void *);
 
-static struct {
-	struct tier6_io		io;
-	int			fd;
-} tap;
+/* The local i/o event schedule for use in our event loop. */
+static struct tier6_io		io;
 
+/* The fd for our open tap device. */
+static int			fd;
+
+/*
+ * Initialise our tap device by creating it and scheduling the underlying
+ * fd onto our event loop.
+ */
 void
 tier6_tap_init(void)
 {
-	int		flags;
+	io.handle = tap_io_event;
+	fd = tier6_platform_tap_init(t6->tapname);
 
-	tap.io.handle = tap_io_event;
-	tap.fd = tier6_platform_tap_init(t6->tapname);
-
-	if ((flags = fcntl(tap.fd, F_GETFL, 0)) == -1)
-		fatal("fnctl: %s", errno_s);
-
-	flags |= O_NONBLOCK;
-
-	if (fcntl(tap.fd, F_SETFL, flags) == -1)
-		fatal("fnctl: %s", errno_s);
-
-	tier6_platform_io_schedule(tap.fd, &tap);
+	tier6_socket_nonblock(fd);
+	tier6_platform_io_schedule(fd, &io);
 }
 
+/*
+ * Output the given ethernet frame into the tap device.
+ */
 void
 tier6_tap_output(const void *data, size_t len)
 {
 	PRECOND(data != NULL);
-	PRECOND(len > 0);
+	PRECOND(len > sizeof(struct tier6_ether));
 
-	if (tier6_platform_tap_write(tap.fd, data, len) == -1)
+	if (tier6_platform_tap_write(fd, data, len) == -1)
 		printf("failed to write to tap: %s\n", errno_s);
 }
 
+/*
+ * Callback from our event loop when data is to be read from
+ * the tap device. For every frame we read we output it towards
+ * all connected peers.
+ */
 static void
 tap_io_event(void *udata)
 {
 	ssize_t		ret;
 	u_int8_t	pkt[1500];
 
-	PRECOND(udata == &tap);
+	PRECOND(udata == &io);
 
 	for (;;) {
-		ret = tier6_platform_tap_read(tap.fd, pkt, sizeof(pkt));
+		ret = tier6_platform_tap_read(fd, pkt, sizeof(pkt));
 		if (ret == -1) {
 			if (errno == EINTR)
 				continue;
 
 			if (errno == EWOULDBLOCK || errno == EAGAIN) {
-				tap.io.flags &= ~TIER6_IO_READABLE;
+				io.flags &= ~TIER6_IO_READABLE;
 				return;
 			}
 

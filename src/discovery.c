@@ -26,38 +26,52 @@
 
 #include "tier6.h"
 
+/*
+ * The autodiscovery of peers uses the sanctum liturgy functionaly
+ * to receive updates from a cathedral about what peers have come
+ * online and want tunnels.
+ */
+
 static void	discovery_io_read(void);
 static void	discovery_io_event(void *);
 
 static void	discovery_kyrka_event(KYRKA *, union kyrka_event *, void *);
 static void	discovery_kyrka_send(const void *, size_t, u_int64_t, void *);
 
-static struct {
-	struct tier6_io		io;
-	int			fd;
-	time_t			at;
-	struct sockaddr_in	addr;
-	KYRKA			*ctx;
-} discovery;
+/* The local i/o event schedule for use in our event loop. */
+static struct tier6_io		io;
 
+/* The UDP socket on which we send and receive cathedral data. */
+static int			fd;
+
+/* The current configured cathedral address. */
+static struct sockaddr_in	addr;
+
+/* Our libkyrka context. */
+static KYRKA			*liturgy;
+
+/* The next time we should notify our cathedrals. */
+static time_t			next_notify;
+
+/*
+ * Initialise our autodiscovery by creating a socket, setting up
+ * the libkyrka context and getting the socket setup in our event loop.
+ */
 void
 tier6_discovery_init(void)
 {
 	struct kyrka_cathedral_cfg	cfg;
 
-	memset(&discovery, 0, sizeof(discovery));
-
-	if ((discovery.fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		fatal("socket: %s", errno_s);
 
-	discovery.io.handle = discovery_io_event;
-	memcpy(&discovery.addr, &t6->cathedral, sizeof(t6->cathedral));
+	io.handle = discovery_io_event;
+	memcpy(&addr, &t6->cathedral, sizeof(t6->cathedral));
 
-	tier6_socket_nonblock(discovery.fd);
-	tier6_platform_io_schedule(discovery.fd, &discovery);
+	tier6_socket_nonblock(fd);
+	tier6_platform_io_schedule(fd, &io);
 
-	discovery.ctx = kyrka_ctx_alloc(discovery_kyrka_event, NULL);
-	if (discovery.ctx == NULL)
+	if ((liturgy = kyrka_ctx_alloc(discovery_kyrka_event, NULL)) == NULL)
 		fatal("failed to create discovery context");
 
 	memset(&cfg, 0, sizeof(cfg));
@@ -72,35 +86,45 @@ tier6_discovery_init(void)
 	cfg.secret = t6->cs_path;
 	cfg.send = discovery_kyrka_send;
 
-	if (kyrka_cathedral_config(discovery.ctx, &cfg) == -1) {
+	if (kyrka_cathedral_config(liturgy, &cfg) == -1) {
 		fatal("failed to configure cathedral: %d",
-		    kyrka_last_error(discovery.ctx));
+		    kyrka_last_error(liturgy));
 	}
 }
 
+/*
+ * We update our cathedrals once every second about our presence.
+ */
 void
 tier6_discovery_update(void)
 {
-	if (discovery.at > 0 && t6->now < discovery.at)
+	if (next_notify > 0 && t6->now < next_notify)
 		return;
 
-	discovery.at = t6->now + 1;
+	next_notify = t6->now + 1;
 
-	if (kyrka_cathedral_liturgy(discovery.ctx, NULL, 0) == -1) {
+	if (kyrka_cathedral_liturgy(liturgy, NULL, 0) == -1) {
 		printf("kyrka_cathedral_notify: %d\n",
-		    kyrka_last_error(discovery.ctx));
+		    kyrka_last_error(liturgy));
 	}
 }
 
+/*
+ * Callback for when an event occurred on our liturgy socket.
+ */
 static void
 discovery_io_event(void *udata)
 {
-	PRECOND(udata == &discovery);
+	PRECOND(udata == &io);
 
-	if (discovery.io.flags & TIER6_IO_READABLE)
+	if (io.flags & TIER6_IO_READABLE)
 		discovery_io_read();
 }
 
+/*
+ * Attempt to read packets from our liturgy socket and push them
+ * into the libkyrka context so they get handled.
+ */
 static void
 discovery_io_read(void)
 {
@@ -108,11 +132,11 @@ discovery_io_read(void)
 	u_int8_t	buf[1500];
 
 	for (;;) {
-		if ((ret = read(discovery.fd, buf, sizeof(buf))) == -1) {
+		if ((ret = read(fd, buf, sizeof(buf))) == -1) {
 			if (errno == EINTR)
 				return;
 			if (errno == EWOULDBLOCK || errno == EAGAIN) {
-				discovery.io.flags &= ~TIER6_IO_READABLE;
+				io.flags &= ~TIER6_IO_READABLE;
 				break;
 			}
 			fatal("read: %s", errno_s);
@@ -121,19 +145,23 @@ discovery_io_read(void)
 		if (ret == 0)
 			continue;
 
-		if (kyrka_purgatory_input(discovery.ctx, buf, ret) == -1) {
+		if (kyrka_purgatory_input(liturgy, buf, ret) == -1) {
 			printf("kyrka_purgatory_input: %d\n",
-			    kyrka_last_error(discovery.ctx));
+			    kyrka_last_error(liturgy));
 		}
 	}
 }
 
+/*
+ * Callback from libkyrka when an event occurred on our liturgy context.
+ * We only care about the KYRKA_EVENT_LITURGY_RECEIVED event for now.
+ */
 static void
 discovery_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 {
 	int		idx;
 
-	PRECOND(ctx == discovery.ctx);
+	PRECOND(ctx == liturgy);
 	PRECOND(evt != NULL);
 	PRECOND(udata == NULL);
 
@@ -148,6 +176,9 @@ discovery_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 	}
 }
 
+/*
+ * Callback from libkyrka when we have data to be sent to the cathedral.
+ */
 static void
 discovery_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 {
@@ -155,8 +186,7 @@ discovery_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 	PRECOND(len > 0);
 	PRECOND(udata == NULL);
 
-	if (sendto(discovery.fd, data, len, 0,
-	    (const struct sockaddr *)&discovery.addr,
-	    sizeof(discovery.addr)) == -1)
+	if (sendto(fd, data, len, 0,
+	    (const struct sockaddr *)&addr, sizeof(addr)) == -1)
 		printf("sendto: %s\n", errno_s);
 }

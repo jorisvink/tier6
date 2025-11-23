@@ -24,8 +24,12 @@
 
 #include "tier6.h"
 
+/* The global tier6 state. */
 struct tier6	*t6;
 
+/*
+ * tier6 startup, gets everything going.
+ */
 int
 main(int argc, char **argv)
 {
@@ -56,6 +60,9 @@ main(int argc, char **argv)
 	return (0);
 }
 
+/*
+ * Helper function to mark a given fd as non-blocking.
+ */
 void
 tier6_socket_nonblock(int fd)
 {

@@ -28,10 +28,15 @@
 
 #include "tier6.h"
 
+/* The number of max events we handle in a single kevent() call. */
 #define EVENTS_MAX	256
 
+/* The kqueue() fd. */
 static int	kfd = -1;
 
+/*
+ * Initialise the OpenBSD platform.
+ */
 void
 tier6_platform_init(void)
 {
@@ -41,6 +46,10 @@ tier6_platform_init(void)
 		fatal("kqueue: %s", errno_s);
 }
 
+/*
+ * Wait for any i/o to occur on previously registered sockets.
+ * The maximum wait time is 1 second.
+ */
 void
 tier6_platform_io_wait(void)
 {
@@ -76,6 +85,10 @@ tier6_platform_io_wait(void)
 	}
 }
 
+/*
+ * Schedule the given fd into our event loop, and tie it together
+ * with the user data pointer.
+ */
 void
 tier6_platform_io_schedule(int fd, void *udata)
 {
@@ -90,11 +103,15 @@ tier6_platform_io_schedule(int fd, void *udata)
 		fatal("kevent: %s", errno_s);
 }
 
+/*
+ * Create our tap device, unlike Linux we cannot name tap devices and
+ * thus are left to use the standard names.
+ */
 int
 tier6_platform_tap_init(const char *name)
 {
 	char		path[128];
-	int		fd, idx, len, flags;
+	int		sfd, idx, len, flags;
 
 	PRECOND(name != NULL);
 
@@ -110,17 +127,12 @@ tier6_platform_tap_init(const char *name)
 	if (idx == 256)
 		fatal("unable to find free tap device");
 
-	if ((flags = fcntl(fd, F_GETFL, 0)) == -1)
-		fatal("fcntl: %s", errno_s);
-
-	flags |= O_NONBLOCK;
-
-	if (fcntl(fd, F_SETFL, flags) == -1)
-		fatal("fcntl: %s", errno_s);
-
 	return (fd);
 }
 
+/*
+ * Read a frame from our tap device.
+ */
 ssize_t
 tier6_platform_tap_read(int fd, void *data, size_t len)
 {
@@ -131,6 +143,9 @@ tier6_platform_tap_read(int fd, void *data, size_t len)
 	return (read(fd, data, len));
 }
 
+/*
+ * Write a frame from our tap device.
+ */
 ssize_t
 tier6_platform_tap_write(int fd, const void *data, size_t len)
 {

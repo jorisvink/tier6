@@ -20,12 +20,14 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 #include "tier6.h"
+
+/* The maximum age in seconds a MAC is valid. */
+#define PEER_MAC_AGE_MAX	10
 
 static void	peer_create(u_int8_t);
 static void	peer_delete(u_int8_t);
@@ -48,6 +50,9 @@ static LIST_HEAD(, tier6_peer)		peers;
 static struct tier6_ether		broadcast;
 static time_t				next_update;
 
+/*
+ * Initialise the peer subsystem.
+ */
 void
 tier6_peer_init(void)
 {
@@ -63,6 +68,9 @@ tier6_peer_init(void)
 	broadcast.src[5] = 0xff;
 }
 
+/*
+ * Bring a peer up or down depending on the state given.
+ */
 void
 tier6_peer_state(u_int8_t id, u_int8_t state)
 {
@@ -86,6 +94,9 @@ tier6_peer_state(u_int8_t id, u_int8_t state)
 		peer_delete(id);
 }
 
+/*
+ * Send a cathedral notification every 1 second for all alive peers.
+ */
 void
 tier6_peer_update(void)
 {
@@ -116,6 +127,12 @@ tier6_peer_update(void)
 	}
 }
 
+/*
+ * Forward an ethernet frame to the peers that should be getting it.
+ *
+ * Per peer we check if the destination MAC for the ethernet frame
+ * was previously seen on it as a source MAC address.
+ */
 void
 tier6_peer_output(const void *pkt, size_t len)
 {
@@ -152,11 +169,17 @@ tier6_peer_output(const void *pkt, size_t len)
 	}
 }
 
+/*
+ * Create a new tunnel for the given peer and schedule it onto
+ * our internal event loop.
+ */
 static void
 peer_create(u_int8_t id)
 {
 	struct kyrka_cathedral_cfg	cfg;
 	struct tier6_peer		*peer;
+
+	PRECOND(id >= 1);
 
 	if ((peer = calloc(1, sizeof(*peer))) == NULL)
 		fatal("calloc: peer failed");
@@ -209,11 +232,16 @@ peer_create(u_int8_t id)
 	printf("peer %02x created\n", id);
 }
 
+/*
+ * Delete an existing tunnel for the given peer.
+ */
 static void
 peer_delete(u_int8_t id)
 {
 	struct tier6_mac	*mac;
 	struct tier6_peer	*peer;
+
+	PRECOND(id >= 1);
 
 	LIST_FOREACH(peer, &peers, list) {
 		if (peer->id == id)
@@ -238,6 +266,9 @@ peer_delete(u_int8_t id)
 	printf("peer %02x removed\n", id);
 }
 
+/*
+ * Callback from our event loop when data is to be handled on the peer socket.
+ */
 static void
 peer_io_event(void *udata)
 {
@@ -251,6 +282,10 @@ peer_io_event(void *udata)
 		peer_io_read(peer);
 }
 
+/*
+ * Attempt to read packets from the peer socket and insert them into
+ * the libkyrka context for handling.
+ */
 static void
 peer_io_read(struct tier6_peer *peer)
 {
@@ -280,6 +315,9 @@ peer_io_read(struct tier6_peer *peer)
 	}
 }
 
+/*
+ * Callback from libkyrka when an event occurred on the peer tunnel.
+ */
 static void
 peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 {
@@ -330,6 +368,11 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 	}
 }
 
+/*
+ * Callback from libkyrka when plaintext data is available. This plaintext
+ * data should be an ethernet frame. We learn the source mac address and
+ * output the frame onto our tap device.
+ */
 static void
 peer_heaven_input(const void *data, size_t len, u_int64_t magic, void *udata)
 {
@@ -351,6 +394,10 @@ peer_heaven_input(const void *data, size_t len, u_int64_t magic, void *udata)
 	tier6_tap_output(data, len);
 }
 
+/*
+ * Callback from libkyrka when ciphertext is available. This ciphertext
+ * is sent to the current known address for our peer.
+ */
 static void
 peer_purgatory_input(const void *data, size_t len, u_int64_t magic, void *udata)
 {
@@ -367,6 +414,9 @@ peer_purgatory_input(const void *data, size_t len, u_int64_t magic, void *udata)
 		printf("sendto: %s\n", errno_s);
 }
 
+/*
+ * Callback from libkyrka when ciphertext data is to be sent to our cathedral.
+ */
 static void
 peer_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 {
@@ -393,6 +443,10 @@ peer_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 		printf("sendto: %s\n", errno_s);
 }
 
+/*
+ * Register the given MAC address as seen on the peer, these eventually
+ * expire unless `fixed` is set to 1.
+ */
 static void
 peer_mac_register(struct tier6_peer *peer,
     const struct tier6_ether *eth, int fixed)
@@ -427,6 +481,9 @@ peer_mac_register(struct tier6_peer *peer,
 	    mac->addr[3], mac->addr[4], mac->addr[5], peer->id);
 }
 
+/*
+ * Check if the given MAC address is known on the peer.
+ */
 static int
 peer_mac_check(struct tier6_peer *peer, const u_int8_t *addr, size_t len)
 {
@@ -447,6 +504,9 @@ peer_mac_check(struct tier6_peer *peer, const u_int8_t *addr, size_t len)
 	return (0);
 }
 
+/*
+ * Prune all expired MAC addresses from the peer.
+ */
 static void
 peer_mac_prune(struct tier6_peer *peer)
 {
@@ -460,7 +520,7 @@ peer_mac_prune(struct tier6_peer *peer)
 		if (mac->fixed)
 			continue;
 
-		if ((t6->now - mac->age) >= 10) {
+		if ((t6->now - mac->age) >= PEER_MAC_AGE_MAX) {
 			printf("%02x:%02x:%02x:%02x:%02x:%02x gone on %02x\n",
 			    mac->addr[0], mac->addr[1], mac->addr[2],
 			    mac->addr[3], mac->addr[4], mac->addr[5],
