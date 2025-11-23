@@ -2,7 +2,7 @@
 
 Build a global ethernet network using sanctum p2p e2ee tunnels.
 
-Tier6 uses a <a href="https://github.com/jorisvink/sanctum">sanctum</a>
+Tier6 uses <a href="https://github.com/jorisvink/sanctum">sanctum</a>
 cathedral infrastructure to autodiscover peers in its same network and
 establish p2p e2ee tunnels to each peer in full mesh mode. All incoming
 traffic is dumped into a single tap interface. Return traffic is only
