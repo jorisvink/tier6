@@ -37,7 +37,7 @@ static void	peer_io_read(struct tier6_peer *);
 
 static void	peer_heartbeat(struct tier6_peer *);
 static void	peer_mac_prune(struct tier6_peer *);
-static int	peer_mac_check(struct tier6_peer *, const u_int8_t *, size_t);
+static int	peer_mac_forward(struct tier6_peer *, const u_int8_t *, size_t);
 static void	peer_mac_register(struct tier6_peer *,
 		    const struct tier6_ether *, int);
 
@@ -171,7 +171,7 @@ tier6_peer_output(const void *pkt, size_t len)
 	}
 	
 	LIST_FOREACH(peer, &peers, list) {
-		if (peer_mac_check(peer, eth->dst, sizeof(eth->dst)) == -1)
+		if (peer_mac_forward(peer, eth->dst, sizeof(eth->dst)) == -1)
 			continue;
 
 		if (kyrka_heaven_input(peer->ctx, pkt, len) == -1) {
@@ -560,16 +560,19 @@ peer_mac_register(struct tier6_peer *peer,
 }
 
 /*
- * Check if the given MAC address is known on the peer.
+ * Check if we should forward to a given peer based on the MAC address given.
  */
 static int
-peer_mac_check(struct tier6_peer *peer, const u_int8_t *addr, size_t len)
+peer_mac_forward(struct tier6_peer *peer, const u_int8_t *addr, size_t len)
 {
 	struct tier6_mac	*mac;
 
 	PRECOND(peer != NULL);
 	PRECOND(addr != NULL);
 	PRECOND(len == TIER6_ETHERNET_MAC_LEN);
+
+	if ((addr[0] & 0x01) == 1)
+		return (0);
 
 	LIST_FOREACH(mac, &peer->macs, list) {
 		if (!memcmp(mac->addr, addr, len))
