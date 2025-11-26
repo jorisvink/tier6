@@ -22,6 +22,7 @@
 #include <ctype.h>
 #include <limits.h>
 #include <inttypes.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -40,6 +41,7 @@ static void	config_parse_cs_path(char *);
 static void	config_parse_kek_path(char *);
 static void	config_parse_cosk_path(char *);
 static void	config_parse_cathedral(char *);
+static void	config_build_default_paths(void);
 
 static char	*config_read_line(FILE *, char *, size_t);
 
@@ -123,6 +125,10 @@ tier6_config(const char *path)
 
 	if (t6->tapname == NULL)
 		fatal("no tapname was specified in the configuration");
+
+	if (t6->cs_path == NULL || t6->kek_path == NULL ||
+	    t6->cosk_path == NULL)
+		config_build_default_paths();
 
 	if (t6->cs_path == NULL)
 		fatal("no cs-path was specified in the configuration");
@@ -316,4 +322,52 @@ config_check_file(const char *path)
 
 	if (access(path, R_OK) == -1)
 		fatal("%s is not readable (%s)", path, errno_s);
+}
+
+/*
+ * Generate default paths for cosk, cs, and kek if they are missing.
+ * This will match the default structure used by reliquary and allows for
+ * smaller config files.
+ */
+void
+config_build_default_paths(void) {
+	struct passwd 	*pw;
+	char		path[4096];
+
+	PRECOND(t6 != NULL);
+	PRECOND(t6->flock != 0);
+	PRECOND(t6->cs_id != 0);
+	PRECOND(t6->kek_id != 0);
+	PRECOND(t6->runas != NULL);
+
+	if ((pw = getpwnam(t6->runas)) == NULL)
+		fatal("failed to get home dir path of configured user <%s>",
+		    t6->runas);
+
+	if (t6->cs_path == NULL) {
+		snprintf(path, sizeof(path), "%s/.config/reliquary/%" PRIx64
+		    "/id-%08x", pw->pw_dir, t6->flock, t6->cs_id);
+		t6->cs_path = strdup(path);
+
+		tier6_log(LOG_INFO, "loading cs from default path: %s",
+		    t6->cs_path);
+	}
+
+	if (t6->cosk_path == NULL) {
+		snprintf(path, sizeof(path), "%s/.config/reliquary/%" PRIx64
+		    "/cosk-%08x", pw->pw_dir, t6->flock, t6->cs_id);
+		t6->cosk_path = strdup(path);
+
+		tier6_log(LOG_INFO, "loading cosk from default path: %s",
+		    t6->cosk_path);
+	}
+
+	if (t6->kek_path == NULL) {
+		snprintf(path, sizeof(path), "%s/.config/reliquary/%" PRIx64
+		    "/kek-%02x", pw->pw_dir, t6->flock, t6->kek_id);
+		t6->kek_path = strdup(path);
+
+		tier6_log(LOG_INFO, "loading kek from default path: %s",
+		    t6->kek_path);
+	}
 }
