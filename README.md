@@ -33,6 +33,8 @@ files you can create a simple configuration. See the
 A community cathedral network can be found at
 <a href="https://reliquary.se">The Reliquary</a>.
 
+The configuration supports reliquary file paths out of the box.
+
 ## Running
 
 ```
