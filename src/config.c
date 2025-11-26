@@ -30,6 +30,12 @@
 
 #include "tier6.h"
 
+/*
+ * Too condense configuration a little bit tier6 supports reliquary
+ * paths out of the box for cs-path, cosk-path and kek-path.
+ */
+#define CONFIG_RELIQUARY_PATH	"%s/.config/reliquary/%" PRIx64
+
 static void	config_check_file(const char *);
 
 static void	config_parse_runas(char *);
@@ -330,9 +336,12 @@ config_check_file(const char *path)
  * smaller config files.
  */
 void
-config_build_default_paths(void) {
-	struct passwd 	*pw;
-	char		path[4096];
+config_build_default_paths(void)
+{
+	int			len;
+	struct passwd 		*pw;
+	u_int64_t		flock;
+	char			path[4096];
 
 	PRECOND(t6 != NULL);
 	PRECOND(t6->flock != 0);
@@ -340,34 +349,49 @@ config_build_default_paths(void) {
 	PRECOND(t6->kek_id != 0);
 	PRECOND(t6->runas != NULL);
 
-	if ((pw = getpwnam(t6->runas)) == NULL)
-		fatal("failed to get home dir path of configured user <%s>",
+	if ((pw = getpwnam(t6->runas)) == NULL) {
+		fatal("failed to get home dir path of runas user <%s>",
 		    t6->runas);
+	}
+
+	flock = t6->flock & ~(0xff);
 
 	if (t6->cs_path == NULL) {
-		snprintf(path, sizeof(path), "%s/.config/reliquary/%" PRIx64
-		    "/id-%08x", pw->pw_dir, t6->flock, t6->cs_id);
-		t6->cs_path = strdup(path);
+		len = snprintf(path, sizeof(path),
+		    CONFIG_RELIQUARY_PATH "/id-%08x",
+		    pw->pw_dir, flock, t6->cs_id);
+		if (len == -1 || (size_t)len >= sizeof(path))
+			fatal("failed to create cs_path");
 
-		tier6_log(LOG_INFO, "loading cs from default path: %s",
-		    t6->cs_path);
+		if ((t6->cs_path = strdup(path)) == NULL)
+			fatal("strdup");
+
+		tier6_log(LOG_INFO, "loading cs-id from default path");
 	}
 
 	if (t6->cosk_path == NULL) {
-		snprintf(path, sizeof(path), "%s/.config/reliquary/%" PRIx64
-		    "/cosk-%08x", pw->pw_dir, t6->flock, t6->cs_id);
-		t6->cosk_path = strdup(path);
+		len = snprintf(path, sizeof(path),
+		    CONFIG_RELIQUARY_PATH "/cosk-%08x",
+		    pw->pw_dir, flock, t6->cs_id);
+		if (len == -1 || (size_t)len >= sizeof(path))
+			fatal("failed to create cs_path");
 
-		tier6_log(LOG_INFO, "loading cosk from default path: %s",
-		    t6->cosk_path);
+		if ((t6->cosk_path = strdup(path)) == NULL)
+			fatal("strdup");
+
+		tier6_log(LOG_INFO, "loading cosk from default path");
 	}
 
 	if (t6->kek_path == NULL) {
-		snprintf(path, sizeof(path), "%s/.config/reliquary/%" PRIx64
-		    "/kek-%02x", pw->pw_dir, t6->flock, t6->kek_id);
-		t6->kek_path = strdup(path);
+		len = snprintf(path, sizeof(path),
+		    CONFIG_RELIQUARY_PATH "/kek-%02x",
+		    pw->pw_dir, flock, t6->kek_id);
+		if (len == -1 || (size_t)len >= sizeof(path))
+			fatal("failed to create cs_path");
 
-		tier6_log(LOG_INFO, "loading kek from default path: %s",
-		    t6->kek_path);
+		if ((t6->kek_path = strdup(path)) == NULL)
+			fatal("strdup");
+
+		tier6_log(LOG_INFO, "loading kek from default path");
 	}
 }
