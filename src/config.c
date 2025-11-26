@@ -31,7 +31,7 @@
 #include "tier6.h"
 
 /*
- * Too condense configuration a little bit tier6 supports reliquary
+ * To condense configuration a little bit tier6 supports reliquary
  * paths out of the box for cs-path, cosk-path and kek-path.
  */
 #define CONFIG_RELIQUARY_PATH	"%s/.config/reliquary/%" PRIx64
