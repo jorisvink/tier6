@@ -16,8 +16,11 @@
 
 #include <sys/types.h>
 #include <sys/event.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 
+#include <net/if.h>
 #include <arpa/inet.h>
 
 #include <fcntl.h>
@@ -30,6 +33,12 @@
 
 /* The number of max events we handle in a single kevent() call. */
 #define EVENTS_MAX	256
+
+/* Sometimes we have to do uglies. */
+union deconst {
+	const char	*cp;
+	char		*p;
+};
 
 /* The kqueue() fd. */
 static int	kfd = -1;
@@ -119,8 +128,9 @@ tier6_platform_io_schedule(int fd, void *udata)
 int
 tier6_platform_tap_init(const char *name)
 {
-	char		path[128];
-	int		fd, idx, len;
+	struct ifreq		ifr;
+	char			path[128];
+	int			sfd, fd, idx, len;
 
 	PRECOND(name != NULL);
 
@@ -137,6 +147,28 @@ tier6_platform_tap_init(const char *name)
 		fatal("unable to find free tap device");
 
 	tier6_log(LOG_INFO, "using tap device '%s'", path);
+
+	if ((sfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		fatal("socket: %s", errno_s);
+
+	if (strlcpy(ifr.ifr_name, &path[5],
+	    sizeof(ifr.ifr_name)) >= sizeof(ifr.ifr_name))
+		fatal("failed to copy interface name");
+
+	ifr.ifr_data = t6->tapname;
+
+	if (ioctl(sfd, SIOCSIFDESCR, &ifr) == -1)
+		fatal("ioctl(SIOCSIFDESCR): %s", errno_s);
+
+	if (ioctl(sfd, SIOCGIFFLAGS, &ifr) == -1)
+		fatal("ioctl(SIOCGIFFLAGS): %s", errno_s);
+
+	ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
+
+	if (ioctl(sfd, SIOCSIFFLAGS, &ifr) == -1)
+		fatal("ioctl(SIOCSIFFLAGS): %s", errno_s);
+
+	(void)close(sfd);
 
 	return (fd);
 }

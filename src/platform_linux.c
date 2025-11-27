@@ -124,7 +124,7 @@ int
 tier6_platform_tap_init(const char *tap)
 {
 	struct ifreq		ifr;
-	int			len, fd;
+	int			len, fd, sfd;
 
 	PRECOND(tap != NULL);
 
@@ -140,6 +140,19 @@ tier6_platform_tap_init(const char *tap)
 
 	if (ioctl(fd, TUNSETIFF, &ifr) == -1)
 		fatal("failed to create tap device %s: %s", tap, errno_s);
+
+	if ((sfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		fatal("socket: %s", errno_s);
+
+	if (ioctl(sfd, SIOCGIFFLAGS, &ifr) == -1)
+		fatal("ioctl(SIOCGIFFLAGS): %s", errno_s);
+
+	ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
+
+	if (ioctl(sfd, SIOCSIFFLAGS, &ifr) == -1)
+		fatal("ioctl(SIOCSIFFLAGS): %s", errno_s);
+
+	(void)close(sfd);
 
 	tier6_log(LOG_INFO, "interface '%s' created", tap);
 

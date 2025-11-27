@@ -174,7 +174,8 @@ tier6_peer_output(const void *pkt, size_t len)
 		if (peer_mac_forward(peer, eth->dst, sizeof(eth->dst)) == -1)
 			continue;
 
-		if (kyrka_heaven_input(peer->ctx, pkt, len) == -1) {
+		if (kyrka_heaven_input(peer->ctx, pkt, len) == -1 &&
+		    kyrka_last_error(peer->ctx) != KYRKA_ERROR_NO_TX_KEY) {
 			tier6_log(LOG_NOTICE,
 			    "[peer=%02x] kyrka_heaven_input: %d",
 			    peer->id, kyrka_last_error(peer->ctx));
@@ -514,7 +515,8 @@ peer_heartbeat(struct tier6_peer *peer)
 	memset(&eth, 0, sizeof(eth));
 	eth.proto = htons(TIER6_ETHER_TYPE_HEARTBEAT);
 
-	if (kyrka_heaven_input(peer->ctx, &eth, sizeof(eth)) == -1) {
+	if (kyrka_heaven_input(peer->ctx, &eth, sizeof(eth)) == -1 &&
+	    kyrka_last_error(peer->ctx) != KYRKA_ERROR_NO_TX_KEY) {
 		tier6_log(LOG_NOTICE, "[peer=%02x] kyrka_heaven_input: %d",
 		    peer->id, kyrka_last_error(peer->ctx));
 	}
