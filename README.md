@@ -1,6 +1,7 @@
 # tier6
 
 Build a global ethernet network using sanctum p2p e2ee tunnels.
+Join all your machines into a single L2 network, no matter where they are.
 
 Tier6 uses <a href="https://github.com/jorisvink/sanctum">sanctum</a>
 cathedral infrastructure to autodiscover peers in its same network and
@@ -11,8 +12,6 @@ a source earlier, acting like a soft-switch.
 
 Tier6 is only L2, it does not autoconfigure your interfaces.
 You are in charge of that.
-
-Join all your machines into a single L2 network, no matter where they are.
 
 ## Building
 
