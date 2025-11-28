@@ -4,7 +4,7 @@ Build a global ethernet network using sanctum p2p e2ee tunnels.
 Join all your machines into a single L2 network, no matter where they are.
 
 Tier6 uses <a href="https://github.com/jorisvink/sanctum">sanctum</a>
-cathedral infrastructure to autodiscover peers in its same network and
+cathedral infrastructure to autodiscover peers the same flock and
 establish p2p e2ee tunnels to each peer in full mesh mode. All incoming
 traffic is dumped into a single tap interface. Return traffic is only
 sent to peers on which the destination MAC address has been seen as
