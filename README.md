@@ -9,7 +9,9 @@ traffic is dumped into a single tap interface. Return traffic is only
 sent to peers on which the destination MAC address has been seen as
 a source earlier, acting like a soft-switch.
 
-This is still a work in progress.
+Tier6 is only L2, it does not autoconfigure your interfaces.
+
+You are in charge of that.
 
 ## Building
 
