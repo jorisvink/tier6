@@ -50,9 +50,6 @@ static void	peer_purgatory_input(const void *, size_t, u_int64_t, void *);
 /* Our list of active peers. */
 static LIST_HEAD(, tier6_peer)		peers;
 
-/* The broadcast address is added to all tunnels. */
-static struct tier6_ether		broadcast;
-
 /* The next time we should update peers. */
 static time_t				next_update;
 
@@ -63,15 +60,6 @@ void
 tier6_peer_init(void)
 {
 	LIST_INIT(&peers);
-
-	memset(&broadcast, 0, sizeof(broadcast));
-
-	broadcast.src[0] = 0xff;
-	broadcast.src[1] = 0xff;
-	broadcast.src[2] = 0xff;
-	broadcast.src[3] = 0xff;
-	broadcast.src[4] = 0xff;
-	broadcast.src[5] = 0xff;
 }
 
 /*
@@ -203,8 +191,6 @@ peer_create(u_int8_t id)
 	peer->id = id;
 	peer->hb_frequency = 5;
 	peer->io.handle = peer_io_event;
-
-	peer_mac_register(peer, &broadcast, 1);
 
 	memcpy(&peer->addr, &t6->cathedral, sizeof(t6->cathedral));
 	memcpy(&peer->cathedral, &peer->addr, sizeof(peer->addr));
@@ -556,7 +542,7 @@ peer_mac_register(struct tier6_peer *peer,
 	LIST_INSERT_HEAD(&peer->macs, mac, list);
 
 	tier6_log(LOG_INFO,
-	    "[peer=%02x] %02x:%02x:%02x:%02x:%02x:%02x disovered",
+	    "[peer=%02x] %02x:%02x:%02x:%02x:%02x:%02x discovered",
 	    peer->id, mac->addr[0], mac->addr[1], mac->addr[2],
 	    mac->addr[3], mac->addr[4], mac->addr[5]);
 }
