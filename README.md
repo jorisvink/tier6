@@ -9,6 +9,25 @@ traffic is dumped into a single tap interface. Return traffic is only
 sent to peers on which the destination MAC address has been seen as
 a source earlier, acting like a soft-switch.
 
+```
+   +--------+     p2p e2ee     +--------+
+   | node 1 | ---------------- | node 2 |
+   +--------+                  +--------+
+         ^  ^                  ^  ^
+         |  |____           ___|  |
+         |      v           v     |
+         |     +-------------+    |
+p2p e2ee |     |   virtual   |    | p2p e2ee
+         |     |   ethernet  |    |
+         |     +-------------+    |
+         |            ^           |
+         |            |           |
+         |       +--------+       |
+         +-----> | node 3 | <-----+
+                 +--------+
+
+```
+
 Tier6 is only L2, it does not autoconfigure your interfaces.
 You are in charge of that.
 
