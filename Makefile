@@ -66,7 +66,7 @@ $(OBJDIR)/%.o: %.c
 
 src/tier6.c: $(VERSION).c
 
-$(VERSION).c: $(OBJDIR) force
+$(VERSION).c: force
 	@if [ -f RELEASE ]; then \
 		printf "const char *tier6_build_rev = \"%s\";\n" \
 		    `cat RELEASE` > $(VERSION)_gen; \
