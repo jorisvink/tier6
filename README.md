@@ -11,7 +11,7 @@ a source earlier, acting like a soft-switch.
 
 ```
    +--------+     p2p e2ee     +--------+
-   | node 1 | ---------------- | node 2 |
+   | node 1 | <--------------> | node 2 |
    +--------+                  +--------+
          ^  ^                  ^  ^
          |  |____           ___|  |
