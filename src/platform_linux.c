@@ -144,6 +144,18 @@ tier6_platform_tap_init(const char *tap)
 	if ((sfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		fatal("socket: %s", errno_s);
 
+	ifr.ifr_hwaddr.sa_family = AF_LOCAL;
+
+	ifr.ifr_hwaddr.sa_data[0] = 0x06;
+	ifr.ifr_hwaddr.sa_data[1] = t6->kek_id;
+	ifr.ifr_hwaddr.sa_data[2] = (t6->cs_id >> 24) & 0xff;
+	ifr.ifr_hwaddr.sa_data[3] = (t6->cs_id >> 16) & 0xff;
+	ifr.ifr_hwaddr.sa_data[4] = (t6->cs_id >> 8) & 0xff;
+	ifr.ifr_hwaddr.sa_data[5] = t6->cs_id & 0xff;;
+
+	if (ioctl(sfd, SIOCSIFHWADDR, &ifr) == -1)
+		fatal("ioctl(SIOCSIFHWADDR): %s", errno_s);
+
 	if (ioctl(sfd, SIOCGIFFLAGS, &ifr) == -1)
 		fatal("ioctl(SIOCGIFFLAGS): %s", errno_s);
 

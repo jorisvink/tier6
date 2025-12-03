@@ -20,8 +20,10 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 
-#include <net/if.h>
 #include <arpa/inet.h>
+
+#include <net/if.h>
+#include <netinet/if_ether.h>
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -159,6 +161,19 @@ tier6_platform_tap_init(const char *name)
 
 	if (ioctl(sfd, SIOCSIFDESCR, &ifr) == -1)
 		fatal("ioctl(SIOCSIFDESCR): %s", errno_s);
+
+	ifr.ifr_addr.sa_family = AF_LOCAL;
+	ifr.ifr_addr.sa_len = ETHER_ADDR_LEN;
+
+	ifr.ifr_addr.sa_data[0] = 0x06;
+	ifr.ifr_addr.sa_data[1] = t6->kek_id;
+	ifr.ifr_addr.sa_data[2] = (t6->cs_id >> 24) & 0xff;
+	ifr.ifr_addr.sa_data[3] = (t6->cs_id >> 16) & 0xff;
+	ifr.ifr_addr.sa_data[4] = (t6->cs_id >> 8) & 0xff;
+	ifr.ifr_addr.sa_data[5] = t6->cs_id & 0xff;;
+
+	if (ioctl(sfd, SIOCSIFLLADDR, &ifr) == -1)
+		fatal("ioctl(SIOCSIFLLADDR): %s", errno_s);
 
 	if (ioctl(sfd, SIOCGIFFLAGS, &ifr) == -1)
 		fatal("ioctl(SIOCGIFFLAGS): %s", errno_s);
