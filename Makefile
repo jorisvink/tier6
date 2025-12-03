@@ -2,9 +2,12 @@
 
 CC?=cc
 OBJDIR?=obj
-VERSION=$(OBJDIR)/version.c
+VERSION=$(OBJDIR)/version
 
 BIN=tier6
+DESTDIR?=
+PREFIX?=/usr/local
+INSTALL_DIR=$(PREFIX)/bin
 
 CFLAGS+=-std=c99 -Wall -Werror -Wstrict-prototypes
 CFLAGS+=-Wmissing-prototypes -Wmissing-declarations -Wshadow
@@ -42,12 +45,14 @@ else ifeq ("$(OSNAME)", "openbsd")
 	CFLAGS+=-DPLATFORM_OPENBSD
 endif
 
-all: $(BIN)
+all:
+	$(MAKE) $(OBJDIR)
+	$(MAKE) $(BIN)
 
 OBJS=	$(SRC:%.c=$(OBJDIR)/%.o)
 OBJS+=	$(OBJDIR)/version.o
 
-$(BIN): $(OBJDIR) $(OBJS) $(VERSION)
+$(BIN): $(OBJS) $(VERSION).c
 	$(CC) $(OBJS) $(LDFLAGS) -o $@
 
 $(OBJDIR):
@@ -57,24 +62,35 @@ $(OBJDIR)/%.o: %.c
 	@mkdir -p $(shell dirname $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-src/tier6.c: $(VERSION)
+src/tier6.c: $(VERSION).c
 
-$(VERSION): $(OBJDIR) force
+$(VERSION).c: force
 	@if [ -f RELEASE ]; then \
 		printf "const char *tier6_build_rev = \"%s\";\n" \
-		    `cat RELEASE` > $(VERSION); \
+		    `cat RELEASE` > $(VERSION)_gen; \
 	elif [ -d .git ]; then \
 		GIT_REVISION=`git rev-parse --short=8 HEAD`; \
 		GIT_BRANCH=`git rev-parse --abbrev-ref HEAD`; \
-		rm -f $(VERSION); \
+		rm -f $(VERSION)_gen; \
 		printf "const char *tier6_build_rev = \"%s-%s\";\n" \
-		    $$GIT_BRANCH $$GIT_REVISION > $(VERSION); \
+		    $$GIT_BRANCH $$GIT_REVISION > $(VERSION)_gen; \
 	else \
 		echo "No version information found (no .git or RELEASE)"; \
 		exit 1; \
 	fi
 	@printf "const char *tier6_build_date = \"%s\";\n" \
-	    `date +"%Y-%m-%d"` >> $(VERSION);
+	    `date +"%Y-%m-%d"` >> $(VERSION)_gen;
+	@if [ -f $(VERSION).c ]; then \
+		cmp -s $(VERSION)_gen $(VERSION).c; \
+		if [ $$? -ne 0 ]; then \
+			cp $(VERSION)_gen $(VERSION).c; \
+		fi \
+	else \
+		cp $(VERSION)_gen $(VERSION).c; \
+	fi
+
+install: $(BIN)
+	install -m 555 $(BIN) $(DESTDIR)$(INSTALL_DIR)
 
 clean:
 	rm -f $(VERSION)

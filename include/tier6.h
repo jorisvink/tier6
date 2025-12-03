@@ -80,6 +80,13 @@ struct tier6_io {
 
 /*
  * A mac address we discovered on a peer.
+ *
+ * Right now this is a simple linked-list on which we perform an
+ * exhaustive search to see if a frame destination mac matches
+ * a mac on this list.
+ *
+ * While this isn't ideal unless it becomes a measurable bottleneck
+ * this keeps the code nice and tidy.
  */
 struct tier6_mac {
 	time_t				age;
