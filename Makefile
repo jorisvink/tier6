@@ -45,14 +45,12 @@ else ifeq ("$(OSNAME)", "openbsd")
 	CFLAGS+=-DPLATFORM_OPENBSD
 endif
 
-all: $(BIN)
-
-OBJS=	$(SRC:%.c=$(OBJDIR)/%.o)
-OBJS+=	$(OBJDIR)/version.o
-
 all:
 	$(MAKE) $(OBJDIR)
 	$(MAKE) $(BIN)
+
+OBJS=	$(SRC:%.c=$(OBJDIR)/%.o)
+OBJS+=	$(OBJDIR)/version.o
 
 $(BIN): $(OBJS) $(VERSION).c
 	$(CC) $(OBJS) $(LDFLAGS) -o $@
