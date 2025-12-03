@@ -17,8 +17,8 @@ a source earlier, acting like a soft-switch.
          |  |____           ___|  |
          |      v           v     |
          |     +-------------+    |
-p2p e2ee |     |   virtual   |    | p2p e2ee
-         |     |   ethernet  |    |
+         |     |   virtual   |    |
+p2p e2ee |     |   ethernet  |    | p2p e2ee
          |     +-------------+    |
          |            ^           |
          |            |           |
