@@ -25,7 +25,6 @@ p2p e2ee |     |   virtual   |    | p2p e2ee
          |       +--------+       |
          +-----> | node 3 | <-----+
                  +--------+
-
 ```
 
 Tier6 is only L2, it does not autoconfigure your interfaces.
