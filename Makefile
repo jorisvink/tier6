@@ -5,6 +5,9 @@ OBJDIR?=obj
 VERSION=$(OBJDIR)/version.c
 
 BIN=tier6
+DESTDIR?=
+PREFIX?=/usr/local
+INSTALL_DIR=$(PREFIX)/bin
 
 CFLAGS+=-std=c99 -Wall -Werror -Wstrict-prototypes
 CFLAGS+=-Wmissing-prototypes -Wmissing-declarations -Wshadow
@@ -76,6 +79,8 @@ $(VERSION): $(OBJDIR) force
 	@printf "const char *tier6_build_date = \"%s\";\n" \
 	    `date +"%Y-%m-%d"` >> $(VERSION);
 
+install: $(BIN)
+	install -m 555 $(BIN) $(DESTDIR)$(INSTALL_DIR)
 clean:
 	rm -f $(VERSION)
 	rm -rf $(OBJDIR) $(BIN)
