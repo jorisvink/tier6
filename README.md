@@ -32,7 +32,7 @@ You are in charge of that.
 
 ## Building
 
-Tier6 works on Linux and OpenBSD.
+Tier6 works on Linux, OpenBSD and MacOS.
 
 You need <a href="https://github.com/jorisvink/libkyrka">libkyrka</a> and
 pkg-config installed, plus whatever libs libkyrka needed (eg: libsodium).
