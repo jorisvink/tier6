@@ -17,6 +17,10 @@
 #ifndef __H_TIER6_H
 #define __H_TIER6_H
 
+#if defined(__APPLE__)
+#define daemon portability_is_king
+#endif
+
 #include <sys/queue.h>
 
 #include <netinet/in.h>
@@ -24,9 +28,24 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <string.h>
+#include <stdlib.h>
 #include <syslog.h>
 
 #include <libkyrka/libkyrka.h>
+
+/* Portability for macos. */
+#if defined(__APPLE__)
+#undef daemon
+extern int daemon(int, int);
+
+#include <libkern/OSByteOrder.h>
+#define htobe16(x)		OSSwapHostToBigInt16(x)
+#define htobe32(x)		OSSwapHostToBigInt32(x)
+#define htobe64(x)		OSSwapHostToBigInt64(x)
+#define be16toh(x)		OSSwapBigToHostInt16(x)
+#define be32toh(x)		OSSwapBigToHostInt32(x)
+#define be64toh(x)		OSSwapBigToHostInt64(x)
+#endif
 
 /* A few handy macros. */
 #define errno_s		strerror(errno)
@@ -155,10 +174,6 @@ void	tier6_peer_update(void);
 void	tier6_peer_state(u_int8_t, u_int8_t);
 void	tier6_peer_output(const void *, size_t);
 
-/* src/tap.c */
-void	tier6_tap_init(void);
-void	tier6_tap_output(const void *, size_t);
-
 /* src/tier6.c */
 void	tier6_drop_user(void);
 void	tier6_socket_nonblock(int);
@@ -173,10 +188,7 @@ extern struct tier6	*t6;
 /* platform bits. */
 void	tier6_platform_init(void);
 void	tier6_platform_sandbox(void);
-
-int	tier6_platform_tap_init(const char *);
-ssize_t	tier6_platform_tap_read(int, void *, size_t);
-ssize_t	tier6_platform_tap_write(int, const void *, size_t);
+ssize_t	tier6_platform_tap_write(const void *, size_t);
 
 void	tier6_platform_io_wait(void);
 void	tier6_platform_io_schedule(int, void *);

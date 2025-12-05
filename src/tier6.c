@@ -21,7 +21,6 @@
 #include <pwd.h>
 #include <signal.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -111,7 +110,6 @@ main(int argc, char **argv)
 	tier6_config(argv[0]);
 	tier6_platform_init();
 
-	tier6_tap_init();
 	tier6_peer_init();
 	tier6_discovery_init();
 

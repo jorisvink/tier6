@@ -384,7 +384,7 @@ config_build_default_paths(void)
 
 	if (t6->kek_path == NULL) {
 		len = snprintf(path, sizeof(path),
-		    CONFIG_RELIQUARY_PATH "/kek-%02x",
+		    CONFIG_RELIQUARY_PATH "/kek-0x%02x",
 		    pw->pw_dir, flock, t6->kek_id);
 		if (len == -1 || (size_t)len >= sizeof(path))
 			fatal("failed to create cs_path");
