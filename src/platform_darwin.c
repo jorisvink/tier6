@@ -395,6 +395,7 @@ darwin_feth_io(void *udata)
 	u_int8_t		*ptr, *end, *data;
 	u_int8_t		frame[BPF_READ_MAX_BYTES];
 
+	PRECOND(bpf_fd >= 0);
 	PRECOND(udata == &feth_io);
 
 	for (;;) {

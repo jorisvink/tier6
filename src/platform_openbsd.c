@@ -215,6 +215,7 @@ openbsd_tap_io(void *udata)
 	ssize_t		ret;
 	u_int8_t	frame[1500];
 
+	PRECOND(tap_fd >= 0);
 	PRECOND(udata == &tap_io);
 
 	for (;;) {
