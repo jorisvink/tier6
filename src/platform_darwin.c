@@ -47,6 +47,7 @@
  *	4) Open an AF_NDRV socket and attach it to feth6.
  *
  * Now we can inject frames via feth6 and read frames from feth666.
+ *
  * XXX - The feth device names and bpf interface are hardcoded.
  * XXX - We currently do not clean up interfaces.
  */
@@ -59,6 +60,9 @@
 
 /* Hardcoded peer feth device. */
 #define FETH_PEER_IFC			"feth666"
+
+/* The number of attempts at creating a feth interface before we give up. */
+#define FETH_CREATION_TRIES_MAX		50
 
 /*
  * Defined in xnu/bsd/net/if_fake_var.h, we need these to set
@@ -274,6 +278,7 @@ static void
 darwin_feth_create(int fd, const char *ifc)
 {
 	struct ifreq		ifr;
+	int			ret, tries;
 
 	PRECOND(fd >= 0);
 	PRECOND(ifc != NULL);
@@ -284,9 +289,33 @@ darwin_feth_create(int fd, const char *ifc)
 	    sizeof(ifr.ifr_name))
 		fatal("feth name %s too large", ifc);
 
+	for (tries = 0; tries < FETH_CREATION_TRIES_MAX; tries++) {
+		if ((ret = ioctl(fd, SIOCIFCREATE2, &ifr)) == -1) {
+			switch (errno) {
+			case EEXIST:
+				if (ioctl(fd, SIOCIFDESTROY, &ifr) == -1) {
+					fatal("failed to destroy %s: %s",
+					    ifc, errno_s);
+				}
+				break;
+			case EBUSY:
+				usleep(10000);
+				break;
+			default:
+				tier6_log(LOG_INFO, "create: %s", errno_s);
+				break;
+			}
+			continue;
+		}
+
+		break;
+	}
+
+	if (tries == FETH_CREATION_TRIES_MAX)
+		fatal("failed to create feth %s", ifc);
+
 	ifr.ifr_flags = IFF_UP | IFF_RUNNING;
 
-	darwin_ioctl(fd, SIOCIFCREATE2, &ifr);
 	darwin_ioctl(fd, SIOCPROTOATTACH, &ifr);
 	darwin_ioctl(fd, SIOCSIFFLAGS, &ifr);
 }
