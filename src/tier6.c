@@ -48,11 +48,14 @@ static int			foreground = 1;
 static void
 usage(void)
 {
-	printf("tier6 [-d] [config]\n");
+	printf("Usage: tier6 [options] [config]\n");
 	printf("\n");
 	printf("options:\n");
 	printf("  -d  Daemonize the process, running in the background.\n");
 	printf("  -h  This help text.\n");
+	printf("\n");
+	printf("If no configuration is given the default ");
+	printf("/etc/tier6.conf path is used.\n");
 	exit(1);
 }
 
