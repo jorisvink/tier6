@@ -302,8 +302,7 @@ darwin_feth_create(int fd, const char *ifc)
 				usleep(10000);
 				break;
 			default:
-				tier6_log(LOG_INFO, "create: %s", errno_s);
-				break;
+				fatal("SIOCIFCREATE2 %s: %s", ifc, errno_s);
 			}
 			continue;
 		}
