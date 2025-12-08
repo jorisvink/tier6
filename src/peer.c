@@ -133,16 +133,16 @@ tier6_peer_update(void)
  * was previously seen on it as a source MAC address.
  */
 void
-tier6_peer_output(const void *pkt, size_t len)
+tier6_peer_output(const void *frame, size_t len)
 {
 	const struct tier6_ether	*eth;
 	struct tier6_peer		*peer;
 	u_int16_t			proto;
 
-	PRECOND(pkt != NULL);
+	PRECOND(frame != NULL);
 	PRECOND(len >= sizeof(*eth));
 
-	eth = pkt;
+	eth = frame;
 
 	proto = ntohs(eth->proto);
 
@@ -162,11 +162,11 @@ tier6_peer_output(const void *pkt, size_t len)
 		if (peer_mac_forward(peer, eth->dst, sizeof(eth->dst)) == -1)
 			continue;
 
-		if (kyrka_heaven_input(peer->ctx, pkt, len) == -1 &&
+		if (kyrka_heaven_input(peer->ctx, frame, len) == -1 &&
 		    kyrka_last_error(peer->ctx) != KYRKA_ERROR_NO_TX_KEY) {
 			tier6_log(LOG_NOTICE,
-			    "[peer=%02x] kyrka_heaven_input: %d",
-			    peer->id, kyrka_last_error(peer->ctx));
+			    "[peer=%02x] kyrka_heaven_input: %d (%zu)",
+			    peer->id, kyrka_last_error(peer->ctx), len);
 		}
 	}
 }
@@ -415,7 +415,9 @@ peer_heaven_input(const void *data, size_t len, u_int64_t magic, void *udata)
 	}
 
 	peer_mac_register(peer, eth, 0);
-	tier6_tap_output(data, len);
+
+	if (tier6_platform_tap_write(data, len) == -1)
+		tier6_log(LOG_NOTICE, "tap write failed: %s", errno_s);
 }
 
 /*

@@ -34,8 +34,17 @@
 /* Maximum number of events in one single epoll_wait() call. */
 #define EVENTS_MAX	256
 
+static void		linux_tap_io(void *);
+static void		linux_tap_create(void);
+
 /* The epoll fd use. */
-static int	efd = -1;
+static int		efd = -1;
+
+/* The io event interface. */
+static struct tier6_io	tap_io;
+
+/* The tap fd. */
+static int		tap_fd = -1;
 
 /*
  * Initialise the Linux platform.
@@ -47,6 +56,12 @@ tier6_platform_init(void)
 
 	if ((efd = epoll_create(1)) == -1)
 		fatal("epoll_create: %s", errno_s);
+
+	linux_tap_create();
+	tap_io.handle = linux_tap_io;
+
+	tier6_socket_nonblock(tap_fd);
+	tier6_platform_io_schedule(tap_fd, &tap_io);
 }
 
 /*
@@ -118,69 +133,100 @@ tier6_platform_io_schedule(int fd, void *udata)
 }
 
 /*
- * Create our named tap device.
+ * Write a frame from our tap device.
  */
-int
-tier6_platform_tap_init(const char *tap)
+ssize_t
+tier6_platform_tap_write(const void *data, size_t len)
+{
+	PRECOND(data != NULL);
+	PRECOND(len > 0);
+
+	return (write(tap_fd, data, len));
+}
+
+/*
+ * Create our name tap interface based on the tapname configuration.
+ */
+static void
+linux_tap_create(void)
 {
 	struct ifreq		ifr;
-	int			len, fd, sfd;
-
-	PRECOND(tap != NULL);
+	int			len, fd;
 
 	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
 
-	if ((fd = open("/dev/net/tun", O_RDWR)) == -1)
+	if ((tap_fd = open("/dev/net/tun", O_RDWR)) == -1)
 		fatal("failed to open /dev/net/tun: %s", errno_s);
 
-	len = snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", tap);
+	len = snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", t6->tapname);
 	if (len == -1 || (size_t)len >= sizeof(ifr.ifr_name))
-		fatal("tap interface name '%s' too large", tap);
+		fatal("tap interface name '%s' too large", t6->tapname);
 
-	if (ioctl(fd, TUNSETIFF, &ifr) == -1)
-		fatal("failed to create tap device %s: %s", tap, errno_s);
+	if (ioctl(tap_fd, TUNSETIFF, &ifr) == -1) {
+		fatal("failed to create tap device %s: %s",
+		    t6->tapname, errno_s);
+	}
 
-	if ((sfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		fatal("socket: %s", errno_s);
 
-	if (ioctl(sfd, SIOCGIFFLAGS, &ifr) == -1)
+	ifr.ifr_hwaddr.sa_family = AF_LOCAL;
+
+	ifr.ifr_hwaddr.sa_data[0] = 0x06;
+	ifr.ifr_hwaddr.sa_data[1] = t6->kek_id;
+	ifr.ifr_hwaddr.sa_data[2] = (t6->cs_id >> 24) & 0xff;
+	ifr.ifr_hwaddr.sa_data[3] = (t6->cs_id >> 16) & 0xff;
+	ifr.ifr_hwaddr.sa_data[4] = (t6->cs_id >> 8) & 0xff;
+	ifr.ifr_hwaddr.sa_data[5] = t6->cs_id & 0xff;;
+
+	if (ioctl(fd, SIOCSIFHWADDR, &ifr) == -1)
+		fatal("ioctl(SIOCSIFHWADDR): %s", errno_s);
+
+	if (ioctl(fd, SIOCGIFFLAGS, &ifr) == -1)
 		fatal("ioctl(SIOCGIFFLAGS): %s", errno_s);
 
 	ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
 
-	if (ioctl(sfd, SIOCSIFFLAGS, &ifr) == -1)
+	if (ioctl(fd, SIOCSIFFLAGS, &ifr) == -1)
 		fatal("ioctl(SIOCSIFFLAGS): %s", errno_s);
 
-	(void)close(sfd);
+	(void)close(fd);
 
-	tier6_log(LOG_INFO, "interface '%s' created", tap);
-
-	return (fd);
+	tier6_log(LOG_INFO, "interface '%s' created", t6->tapname);
 }
 
 /*
- * Read a frame from our tap device.
+ * Read a frame from our tap interface and inject it into peer tunnels.
  */
-ssize_t
-tier6_platform_tap_read(int fd, void *data, size_t len)
+static void
+linux_tap_io(void *udata)
 {
-	PRECOND(fd >= 0);
-	PRECOND(data != NULL);
-	PRECOND(len > 0);
+	ssize_t		ret;
+	u_int8_t	frame[1500];
 
-	return (read(fd, data, len));
-}
+	PRECOND(tap_fd >= 0);
+	PRECOND(udata == &tap_io);
 
-/*
- * Write a frame from our tap device.
- */
-ssize_t
-tier6_platform_tap_write(int fd, const void *data, size_t len)
-{
-	PRECOND(fd >= 0);
-	PRECOND(data != NULL);
-	PRECOND(len > 0);
+	for (;;) {
+		if ((ret = read(tap_fd, frame, sizeof(frame))) == -1) {
+			if (errno == EINTR)
+				continue;
 
-	return (write(fd, data, len));
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				tap_io.flags &= ~TIER6_IO_READABLE;
+				return;
+			}
+
+			fatal("tap read: %s", errno_s);
+		}
+
+		if (ret == 0)
+			continue;
+
+		if ((size_t)ret <= sizeof(struct tier6_ether))
+			continue;
+
+		tier6_peer_output(frame, ret);
+	}
 }

@@ -2,19 +2,40 @@
 
 Build a global ethernet network using sanctum p2p e2ee tunnels.
 
-Tier6 uses <a href="https://github.com/jorisvink/sanctum">sanctum</a>
-cathedral infrastructure to autodiscover peers the same flock and
+Tier6 uses the <a href="https://github.com/jorisvink/sanctum">sanctum</a>
+protocol and its cathedrals to autodiscover peers in the same flock and
 establish p2p e2ee tunnels to each peer in full mesh mode. All incoming
 traffic is dumped into a single tap interface. Return traffic is only
 sent to peers on which the destination MAC address has been seen as
 a source earlier, acting like a soft-switch.
 
+```
+   +--------+     p2p e2ee     +--------+
+   | node 1 | <--------------> | node 2 |
+   +--------+                  +--------+
+         ^  ^                  ^  ^
+         |  |____           ___|  |
+         |      v           v     |
+         |     +-------------+    |
+         |     |   virtual   |    |
+p2p e2ee |     |   ethernet  |    | p2p e2ee
+         |     +-------------+    |
+         |            ^           |
+         |            |           |
+         |       +--------+       |
+         +-----> | node 3 | <-----+
+                 +--------+
+```
+
 Tier6 is only L2, it does not autoconfigure your interfaces.
 You are in charge of that.
 
+For details on how the underlying tunnels works see
+<a href="https://github.com/jorisvink/sanctum/blob/master/docs/crypto.md">docs/crypto.md</a> in the sanctum repository.
+
 ## Building
 
-Tier6 works on Linux and OpenBSD.
+Tier6 works on Linux, OpenBSD and MacOS.
 
 You need <a href="https://github.com/jorisvink/libkyrka">libkyrka</a> and
 pkg-config installed, plus whatever libs libkyrka needed (eg: libsodium).

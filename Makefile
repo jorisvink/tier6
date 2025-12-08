@@ -21,8 +21,7 @@ LDFLAGS+=$(shell pkg-config --libs libkyrka)
 SRC=	src/tier6.c \
 	src/config.c \
 	src/discovery.c \
-	src/peer.c \
-	src/tap.c
+	src/peer.c
 
 ifeq ("$(SANITIZE)", "1")
 	CFLAGS+=-fsanitize=address,undefined
@@ -43,6 +42,9 @@ ifeq ("$(OSNAME)", "linux")
 else ifeq ("$(OSNAME)", "openbsd")
 	SRC+=src/platform_openbsd.c
 	CFLAGS+=-DPLATFORM_OPENBSD
+else ifeq ("$(OSNAME)", "darwin")
+	SRC+=src/platform_darwin.c
+	CFLAGS+=-DPLATFORM_DARWIN
 endif
 
 all:
