@@ -30,8 +30,6 @@ p2p e2ee |     |   ethernet  |    | p2p e2ee
 Tier6 is only L2, it does not autoconfigure your interfaces.
 You are in charge of that.
 
-## Tunnels
-
 For details on how the underlying tunnels works see
 <a href="https://github.com/jorisvink/sanctum/blob/master/docs/crypto.md">docs/crypto.md</a> in the sanctum repository.
 
