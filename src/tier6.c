@@ -26,6 +26,9 @@
 
 #include "tier6.h"
 
+/* The default tier6 configuration path. */
+#define TIER6_DEFAULT_CONFIG		"/etc/tier6.conf"
+
 static void	usage(void) __attribute__((noreturn));
 static void	version(void) __attribute__((noreturn));
 
@@ -77,7 +80,10 @@ main(int argc, char **argv)
 {
 	struct timespec		ts;
 	sigset_t		sigset;
+	static const char	*config;
 	int			ch, running;
+
+	config = NULL;
 
 	while ((ch = getopt(argc, argv, "dhv")) != -1) {
 		switch (ch) {
@@ -98,7 +104,11 @@ main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 1)
+	if (argc == 0)
+		config = TIER6_DEFAULT_CONFIG;
+	else if (argc == 1)
+		config = argv[0];
+	else
 		usage();
 
 	if ((t6 = calloc(1, sizeof(*t6))) == NULL)
@@ -110,7 +120,7 @@ main(int argc, char **argv)
 	signal_trap(SIGTERM);
 	signal_trap(SIGSEGV);
 
-	tier6_config(argv[0]);
+	tier6_config(config);
 	tier6_platform_init();
 
 	tier6_peer_init();
