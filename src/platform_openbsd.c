@@ -75,6 +75,18 @@ tier6_platform_sandbox(void)
 {
 	tier6_drop_user();
 
+	if (unveil(t6->cs_path, "r") == -1)
+		fatal("unveil(%s): %s", t6->cs_path, errno_s);
+
+	if (unveil(t6->kek_path, "r") == -1)
+		fatal("unveil(%s): %s", t6->kek_path, errno_s);
+
+	if (unveil(t6->cosk_path, "r") == -1)
+		fatal("unveil(%s): %s", t6->cosk_path, errno_s);
+
+	if (pledge("stdio rpath inet", NULL) == -1)
+		fatal("pledge: %s", errno_s);
+
 	if (pledge("stdio rpath inet", NULL) == -1)
 		fatal("pledge: %s", errno_s);
 }
