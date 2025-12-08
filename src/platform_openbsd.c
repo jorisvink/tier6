@@ -74,6 +74,9 @@ void
 tier6_platform_sandbox(void)
 {
 	tier6_drop_user();
+
+	if (pledge("stdio rpath inet", NULL) == -1)
+		fatal("pledge: %s", errno_s);
 }
 
 /*
