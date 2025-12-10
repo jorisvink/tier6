@@ -201,6 +201,7 @@ discovery_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 	PRECOND(udata == NULL);
 
 	cathedral.last = t6->now;
+	cathedral.timeout = TIER6_CATHEDRAL_TIMEOUT;
 
 	switch (evt->type) {
 	case KYRKA_EVENT_LITURGY_RECEIVED:
