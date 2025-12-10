@@ -317,6 +317,7 @@ config_parse_cathedral(char *opt)
 		fatal("cathedral <ip:port>, ip '%s' invalid", opt);
 
 	t6->cathedral.last = 0;
+	t6->cathedral.timeout = 0;
 	t6->cathedral.addr.sin_family = AF_INET;
 	t6->cathedral.addr.sin_port = htons(t6->cathedral.addr.sin_port);
 }
