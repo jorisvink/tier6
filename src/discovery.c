@@ -15,11 +15,13 @@
  */
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -39,23 +41,24 @@ static void	discovery_kyrka_event(KYRKA *, union kyrka_event *, void *);
 static void	discovery_kyrka_send(const void *, size_t, u_int64_t, void *);
 
 /* The local i/o event schedule for use in our event loop. */
-static struct tier6_io		io;
+static struct tier6_io			io;
 
 /* The UDP socket on which we send and receive cathedral data. */
-static int			fd;
+static int				fd;
 
 /* The current configured cathedral address. */
-static struct sockaddr_in	addr;
+struct tier6_cathedral			cathedral;
 
 /* Our libkyrka context. */
-static KYRKA			*liturgy;
+static KYRKA				*liturgy;
 
 /* The next time we should notify our cathedrals. */
-static time_t			next_notify;
+static time_t				next_notify;
 
 /*
  * Initialise our autodiscovery by creating a socket, setting up
  * the libkyrka context and getting the socket setup in our event loop.
+ * We also load any remembrances if a remembrance path was configured.
  */
 void
 tier6_discovery_init(void)
@@ -66,7 +69,6 @@ tier6_discovery_init(void)
 		fatal("socket: %s", errno_s);
 
 	io.handle = discovery_io_event;
-	memcpy(&addr, &t6->cathedral, sizeof(t6->cathedral));
 
 	tier6_socket_nonblock(fd);
 	tier6_platform_io_schedule(fd, &io);
@@ -75,6 +77,20 @@ tier6_discovery_init(void)
 		fatal("failed to create discovery context");
 
 	memset(&cfg, 0, sizeof(cfg));
+
+	if (t6->remembrance != NULL) {
+		cfg.remembrance = 1;
+		tier6_remembrance_load();
+		if (tier6_remembrance_cathedral(&cathedral) == -1) {
+			memcpy(&cathedral, &t6->cathedral,
+			    sizeof(t6->cathedral));
+		}
+	} else {
+		memcpy(&cathedral, &t6->cathedral, sizeof(t6->cathedral));
+	}
+
+	cathedral.last = t6->now;
+	cathedral.timeout = TIER6_CATHEDRAL_TIMEOUT_INIT;
 
 	cfg.group = 0x0001;
 	cfg.tunnel = t6->kek_id;
@@ -90,10 +106,15 @@ tier6_discovery_init(void)
 		fatal("failed to configure cathedral: %d",
 		    kyrka_last_error(liturgy));
 	}
+
+	tier6_log(LOG_INFO,
+	    "discovery running (%s)", tier6_address(&cathedral.addr));
 }
 
 /*
- * We update our cathedrals once every second about our presence.
+ * Update the current connected cathedral about our presence and check
+ * for when the last cathedral response was. If we consider the cathedral
+ * timed out we select a new one and try that one (if we can).
  */
 void
 tier6_discovery_update(void)
@@ -102,6 +123,20 @@ tier6_discovery_update(void)
 		return;
 
 	next_notify = t6->now + 1;
+
+	if (t6->remembrance != NULL) {
+		if ((t6->now - cathedral.last) > cathedral.timeout) {
+			tier6_log(LOG_NOTICE,
+			    "discovery cathedral timed out (%u)",
+			    cathedral.timeout);
+
+			if (tier6_remembrance_cathedral(&cathedral) != -1) {
+				tier6_log(LOG_NOTICE,
+				    "discovery switching to cathedral %s",
+				    tier6_address(&cathedral.addr));
+			}
+		}
+	}
 
 	if (kyrka_cathedral_liturgy(liturgy, NULL, 0) == -1) {
 		tier6_log(LOG_NOTICE, "discovery kyrka_cathedral_notify: %d",
@@ -155,7 +190,6 @@ discovery_io_read(void)
 
 /*
  * Callback from libkyrka when an event occurred on our liturgy context.
- * We only care about the KYRKA_EVENT_LITURGY_RECEIVED event for now.
  */
 static void
 discovery_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
@@ -166,10 +200,15 @@ discovery_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 	PRECOND(evt != NULL);
 	PRECOND(udata == NULL);
 
+	cathedral.last = t6->now;
+
 	switch (evt->type) {
 	case KYRKA_EVENT_LITURGY_RECEIVED:
 		for (idx = 1; idx < KYRKA_PEERS_PER_FLOCK; idx++)
 			tier6_peer_state(idx, evt->liturgy.peers[idx]);
+		break;
+	case KYRKA_EVENT_REMEMBRANCE_RECEIVED:
+		tier6_remembrance_save(&evt->remembrance);
 		break;
 	default:
 		tier6_log(LOG_NOTICE,
@@ -189,6 +228,7 @@ discovery_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 	PRECOND(udata == NULL);
 
 	if (sendto(fd, data, len, 0,
-	    (const struct sockaddr *)&addr, sizeof(addr)) == -1)
+	    (const struct sockaddr *)&cathedral.addr,
+	    sizeof(cathedral.addr)) == -1)
 		tier6_log(LOG_NOTICE, "discovery sendto: %s", errno_s);
 }

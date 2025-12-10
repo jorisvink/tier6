@@ -16,6 +16,8 @@
 
 #include <sys/types.h>
 
+#include <arpa/inet.h>
+
 #include <fcntl.h>
 #include <grp.h>
 #include <pwd.h>
@@ -113,6 +115,9 @@ main(int argc, char **argv)
 
 	if ((t6 = calloc(1, sizeof(*t6))) == NULL)
 		fatal("failed to allocate t6 context");
+
+	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
+	t6->now = ts.tv_sec;
 
 	signal_trap(SIGINT);
 	signal_trap(SIGHUP);
@@ -255,6 +260,26 @@ tier6_socket_nonblock(int fd)
 
 	if (fcntl(fd, F_SETFL, flags) == -1)
 		fatal("fnctl: %s", errno_s);
+}
+
+/*
+ * Helper function that takes a sockaddr_in and returns a pointer
+ * to a human readable ipv4 address:port string.
+ */
+const char *
+tier6_address(struct sockaddr_in *sin)
+{
+	int			len;
+	static char		buf[64];
+
+	PRECOND(sin != NULL);
+
+	len = snprintf(buf, sizeof(buf), "%s:%u",
+	    inet_ntoa(sin->sin_addr), be16toh(sin->sin_port));
+	if (len == -1 || (size_t)len >= sizeof(buf))
+		fatal("failed to create ip:port address string");
+
+	return (buf);
 }
 
 /* Bad juju happened. */

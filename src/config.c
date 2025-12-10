@@ -47,6 +47,7 @@ static void	config_parse_cs_path(char *);
 static void	config_parse_kek_path(char *);
 static void	config_parse_cosk_path(char *);
 static void	config_parse_cathedral(char *);
+static void	config_parse_remembrance(char *);
 static void	config_build_default_paths(void);
 
 static char	*config_read_line(FILE *, char *, size_t);
@@ -55,17 +56,18 @@ static struct {
 	const char	*name;
 	void		(*parse)(char *);
 } opts[] = {
-	{ "cs-id",	config_parse_cs_id },
-	{ "cs-path",	config_parse_cs_path },
-	{ "cosk-path",	config_parse_cosk_path },
+	{ "cs-id",		config_parse_cs_id },
+	{ "cs-path",		config_parse_cs_path },
+	{ "cosk-path",		config_parse_cosk_path },
 
-	{ "kek-id",	config_parse_kek_id },
-	{ "kek-path",	config_parse_kek_path },
+	{ "kek-id",		config_parse_kek_id },
+	{ "kek-path",		config_parse_kek_path },
 
-	{ "runas",	config_parse_runas },
-	{ "flock",	config_parse_flock },
-	{ "tapname",	config_parse_tapname },
-	{ "cathedral",	config_parse_cathedral },
+	{ "runas",		config_parse_runas },
+	{ "flock",		config_parse_flock },
+	{ "tapname",		config_parse_tapname },
+	{ "cathedral",		config_parse_cathedral },
+	{ "remembrance",	config_parse_remembrance },
 
 	{ NULL, NULL },
 };
@@ -123,7 +125,7 @@ tier6_config(const char *path)
 	if (t6->flock == 0)
 		fatal("no flock was specified in the configuration");
 
-	if (t6->cathedral.sin_addr.s_addr == 0)
+	if (t6->cathedral.addr.sin_addr.s_addr == 0)
 		fatal("no cathedral was specified in the configuration");
 
 	if (t6->runas == NULL)
@@ -308,14 +310,30 @@ config_parse_cathedral(char *opt)
 
 	*(port)++ = '\0';
 
-	if (sscanf(port, "%hu", &t6->cathedral.sin_port) != 1)
+	if (sscanf(port, "%hu", &t6->cathedral.addr.sin_port) != 1)
 		fatal("cathedral <ip:port>, port '%s' invalid", port);
 
-	if (inet_pton(AF_INET, opt, &t6->cathedral.sin_addr.s_addr) == -1)
+	if (inet_pton(AF_INET, opt, &t6->cathedral.addr.sin_addr.s_addr) == -1)
 		fatal("cathedral <ip:port>, ip '%s' invalid", opt);
 
-	t6->cathedral.sin_family = AF_INET;
-	t6->cathedral.sin_port = htons(t6->cathedral.sin_port);
+	t6->cathedral.last = 0;
+	t6->cathedral.addr.sin_family = AF_INET;
+	t6->cathedral.addr.sin_port = htons(t6->cathedral.addr.sin_port);
+}
+
+/*
+ * Parse the remembrance configuration option.
+ */
+static void
+config_parse_remembrance(char *opt)
+{
+	PRECOND(opt != NULL);
+
+	if (t6->remembrance != NULL)
+		fatal("remembrance already specified");
+
+	if ((t6->remembrance = strdup(opt)) == NULL)
+		fatal("strdup failed");
 }
 
 /*
