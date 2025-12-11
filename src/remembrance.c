@@ -200,6 +200,7 @@ tier6_remembrance_cathedral(struct tier6_cathedral *cat)
 	cat->last = t6->now;
 	cat->timeout = TIER6_CATHEDRAL_TIMEOUT_INIT;
 
+	cat->addr.sin_family = AF_INET;
 	cat->addr.sin_port = remembrances.ports[idx];
 	cat->addr.sin_addr.s_addr = remembrances.ips[idx];
 
