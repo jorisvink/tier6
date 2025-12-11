@@ -73,7 +73,37 @@ tier6_platform_init(void)
 void
 tier6_platform_sandbox(void)
 {
+	int		len;
+	char		tmp[1024];
+
 	tier6_drop_user();
+
+	if (unveil(t6->cs_path, "r") == -1)
+		fatal("unveil(%s): %s", t6->cs_path, errno_s);
+
+	if (unveil(t6->kek_path, "r") == -1)
+		fatal("unveil(%s): %s", t6->kek_path, errno_s);
+
+	if (unveil(t6->cosk_path, "r") == -1)
+		fatal("unveil(%s): %s", t6->cosk_path, errno_s);
+
+	if (t6->remembrance != NULL) {
+		len = snprintf(tmp, sizeof(tmp), "%s.tmp", t6->remembrance);
+		if (len == -1 || (size_t)len >= sizeof(tmp))
+			fatal("remembrance path too long");
+
+		if (unveil(tmp, "crw") == -1)
+			fatal("unveil(%s): %s", tmp, errno_s);
+
+		if (unveil(t6->remembrance, "crw") == -1)
+			fatal("unveil(%s): %s", t6->remembrance, errno_s);
+
+		if (pledge("stdio cpath wpath rpath inet", NULL) == -1)
+			fatal("pledge: %s", errno_s);
+	} else {
+		if (pledge("stdio rpath inet", NULL) == -1)
+			fatal("pledge: %s", errno_s);
+	}
 }
 
 /*

@@ -21,7 +21,8 @@ LDFLAGS+=$(shell pkg-config --libs libkyrka)
 SRC=	src/tier6.c \
 	src/config.c \
 	src/discovery.c \
-	src/peer.c
+	src/peer.c \
+	src/remembrance.c
 
 ifeq ("$(SANITIZE)", "1")
 	CFLAGS+=-fsanitize=address,undefined

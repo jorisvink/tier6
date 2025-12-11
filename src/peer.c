@@ -37,6 +37,8 @@ static void	peer_io_read(struct tier6_peer *);
 
 static void	peer_heartbeat(struct tier6_peer *);
 static void	peer_mac_prune(struct tier6_peer *);
+static void	peer_cathedral_alive(struct tier6_peer *);
+static void	peer_cathedral_check(struct tier6_peer *);
 static int	peer_mac_forward(struct tier6_peer *, const u_int8_t *, size_t);
 static void	peer_mac_register(struct tier6_peer *,
 		    const struct tier6_ether *, int);
@@ -103,6 +105,9 @@ tier6_peer_update(void)
 	next_update = t6->now + 1;
 
 	LIST_FOREACH(peer, &peers, list) {
+		if (t6->remembrance != NULL)
+			peer_cathedral_check(peer);
+
 		if (kyrka_key_manage(peer->ctx) == -1) {
 			tier6_log(LOG_NOTICE,
 			    "[peer=%02x] kyrka_key_manage: %d",
@@ -192,9 +197,6 @@ peer_create(u_int8_t id)
 	peer->hb_frequency = 5;
 	peer->io.handle = peer_io_event;
 
-	memcpy(&peer->addr, &t6->cathedral, sizeof(t6->cathedral));
-	memcpy(&peer->cathedral, &peer->addr, sizeof(peer->addr));
-
 	if ((peer->fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		fatal("socket: %s", errno_s);
 
@@ -205,6 +207,22 @@ peer_create(u_int8_t id)
 		fatal("failed to create peer context");
 
 	memset(&cfg, 0, sizeof(cfg));
+
+	if (t6->remembrance != NULL) {
+		cfg.remembrance = 1;
+		if (tier6_remembrance_cathedral(&peer->cathedral) == -1) {
+			memcpy(&peer->cathedral, &t6->cathedral,
+			    sizeof(t6->cathedral));
+		}
+	} else {
+		memcpy(&peer->cathedral, &t6->cathedral, sizeof(t6->cathedral));
+	}
+
+	memcpy(&peer->addr, &peer->cathedral.addr,
+	    sizeof(peer->cathedral.addr));
+
+	peer->cathedral.last = t6->now;
+	peer->cathedral.timeout = TIER6_CATHEDRAL_TIMEOUT_INIT;
 
 	cfg.identity = t6->cs_id;
 	cfg.flock_src = t6->flock;
@@ -231,7 +249,8 @@ peer_create(u_int8_t id)
 
 	LIST_INSERT_HEAD(&peers, peer, list);
 
-	tier6_log(LOG_INFO, "[peer=%02x] tunnel created", id);
+	tier6_log(LOG_INFO, "[peer=%02x] tunnel created (%s)", id,
+	    tier6_address(&peer->cathedral.addr));
 }
 
 /*
@@ -346,6 +365,7 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 	case KYRKA_EVENT_AMBRY_RECEIVED:
 		tier6_log(LOG_INFO, "[peer=%02x] ambry generation %08x",
 		    peer->id, evt->ambry.generation);
+		peer_cathedral_alive(peer);
 		break;
 	case KYRKA_EVENT_LOGMSG:
 		tier6_log(LOG_INFO, "[peer=%02x] log: %s",
@@ -353,15 +373,16 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 		break;
 	case KYRKA_EVENT_PEER_DISCOVERY:
 		in.s_addr = evt->peer.ip;
+		peer_cathedral_alive(peer);
 
 		if (peer->addr.sin_addr.s_addr != evt->peer.ip ||
 		    peer->addr.sin_port != evt->peer.port) {
 			peer->addr.sin_port = evt->peer.port;
 			peer->addr.sin_addr.s_addr = evt->peer.ip;
 
-			if (peer->cathedral.sin_addr.s_addr !=
+			if (peer->cathedral.addr.sin_addr.s_addr !=
 			    peer->addr.sin_addr.s_addr &&
-			    peer->cathedral.sin_port !=
+			    peer->cathedral.addr.sin_port !=
 			    peer->addr.sin_port) {
 				tier6_log(LOG_INFO,
 				    "[peer=%02x] p2p discovery %s:%u",
@@ -372,6 +393,9 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 				peer->hb_frequency = 1;
 			}
 		}
+		break;
+	case KYRKA_EVENT_REMEMBRANCE_RECEIVED:
+		peer_cathedral_alive(peer);
 		break;
 	default:
 		tier6_log(LOG_NOTICE, "[peer=%02x] unknown event %u",
@@ -460,13 +484,13 @@ peer_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 
 	peer = udata;
 
-	port = be16toh(peer->cathedral.sin_port);
+	port = be16toh(peer->cathedral.addr.sin_port);
 	if (magic == KYRKA_CATHEDRAL_NAT_MAGIC)
 		port++;
 
 	sin.sin_family = AF_INET;
 	sin.sin_port = htobe16(port);
-	sin.sin_addr.s_addr = peer->cathedral.sin_addr.s_addr;
+	sin.sin_addr.s_addr = peer->cathedral.addr.sin_addr.s_addr;
 
 	if (sendto(peer->fd, data, len, 0,
 	    (struct sockaddr *)&sin, sizeof(sin)) == -1) {
@@ -600,4 +624,38 @@ peer_mac_prune(struct tier6_peer *peer)
 			free(mac);
 		}
 	}
+}
+
+/*
+ * Check if our cathedral is responsive or if we need to swap to another one.
+ */
+static void
+peer_cathedral_check(struct tier6_peer *peer)
+{
+	PRECOND(peer != NULL);
+	PRECOND(t6->remembrance != NULL);
+
+	if ((t6->now - peer->cathedral.last) > peer->cathedral.timeout) {
+		tier6_log(LOG_NOTICE,
+		    "[peer=%02x] cathedral timed out (%u)", peer->id,
+		    peer->cathedral.timeout);
+
+		if (tier6_remembrance_cathedral(&peer->cathedral) != -1) {
+			tier6_log(LOG_NOTICE,
+			    "[peer=%02x] switching to cathedral %s",
+			    peer->id, tier6_address(&peer->cathedral.addr));
+		}
+	}
+}
+
+/*
+ * Mark our cathedral as alive and set the timeout to the non initial one.
+ */
+static void
+peer_cathedral_alive(struct tier6_peer *peer)
+{
+	PRECOND(peer != NULL);
+
+	peer->cathedral.last = t6->now;
+	peer->cathedral.timeout = TIER6_CATHEDRAL_TIMEOUT;
 }

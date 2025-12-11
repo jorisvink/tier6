@@ -116,6 +116,27 @@ struct tier6_mac {
 };
 
 /*
+ * The seconds before we consider a cathedral timed out if we've
+ * not heard from it yet.
+ */
+#define TIER6_CATHEDRAL_TIMEOUT_INIT	10
+
+/*
+ * The seconds before we consider a cathedral timed out if we've
+ * managed to talk to it before.
+ */
+#define TIER6_CATHEDRAL_TIMEOUT		45
+
+/*
+ * A cathedral we are talking to and the last time we heard from it.
+ */
+struct tier6_cathedral {
+	time_t				last;
+	u_int32_t			timeout;
+	struct sockaddr_in		addr;
+};
+
+/*
  * A tier6 peer we are talking to.
  */
 struct tier6_peer {
@@ -125,7 +146,7 @@ struct tier6_peer {
 	u_int8_t			id;
 
 	struct sockaddr_in		addr;
-	struct sockaddr_in		cathedral;
+	struct tier6_cathedral		cathedral;
 
 	time_t				hb_next;
 	u_int32_t			hb_ticks;
@@ -147,6 +168,7 @@ struct tier6 {
 
 	char			*runas;
 	char			*tapname;
+	char			*remembrance;
 
 	char			*cs_path;
 	char			*kek_path;
@@ -154,7 +176,7 @@ struct tier6 {
 
 	time_t			now;
 
-	struct sockaddr_in	cathedral;
+	struct tier6_cathedral	cathedral;
 };
 
 /* from $(OBJDIR)/version.c */
@@ -174,6 +196,11 @@ void	tier6_peer_update(void);
 void	tier6_peer_state(u_int8_t, u_int8_t);
 void	tier6_peer_output(const void *, size_t);
 
+/* src/remembrance.c */
+void	tier6_remembrance_load(void);
+int	tier6_remembrance_cathedral(struct tier6_cathedral *);
+void	tier6_remembrance_save(struct kyrka_event_remembrance *);
+
 /* src/tier6.c */
 void	tier6_drop_user(void);
 void	tier6_socket_nonblock(int);
@@ -182,6 +209,8 @@ void	tier6_log(int, const char *, ...)
 void	tier6_logv(int, const char *, va_list);
 void	fatal(const char *, ...) __attribute__((format (printf, 1, 2)))
 	    __attribute__((noreturn));
+
+const char	*tier6_address(struct sockaddr_in *);
 
 extern struct tier6	*t6;
 
