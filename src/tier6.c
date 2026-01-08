@@ -47,6 +47,9 @@ static volatile sig_atomic_t	sig_recv = -1;
 /* Are we running in foreground mode or not. */
 static int			foreground = 1;
 
+/* Will we write output to syslog or not. */
+static int			use_syslog = 0;
+
 /*
  * Show tier6 usage.
  */
@@ -57,6 +60,7 @@ usage(void)
 	printf("\n");
 	printf("options:\n");
 	printf("  -d  Daemonize the process, running in the background.\n");
+	printf("  -s  Write output to syslog.\n");
 	printf("  -h  This help text.\n");
 	printf("\n");
 	printf("If no configuration is given the default ");
@@ -87,10 +91,13 @@ main(int argc, char **argv)
 
 	config = NULL;
 
-	while ((ch = getopt(argc, argv, "dhv")) != -1) {
+	while ((ch = getopt(argc, argv, "dhsv")) != -1) {
 		switch (ch) {
 		case 'd':
 			foreground = 0;
+			break;
+		case 's':
+			use_syslog = 1;
 			break;
 		case 'v':
 			version();
@@ -131,8 +138,10 @@ main(int argc, char **argv)
 	tier6_peer_init();
 	tier6_discovery_init();
 
-	if (foreground == 0) {
+	if (foreground == 0 || use_syslog == 1)
 		openlog("tier6", LOG_NDELAY | LOG_PID, LOG_DAEMON);
+
+	if (foreground == 0) {
 		if (daemon(1, 0) == -1)
 			fatal("daemon: %s", errno_s);
 	}
@@ -227,7 +236,7 @@ tier6_logv(int prio, const char *fmt, va_list args)
 	PRECOND(prio >= 0);
 	PRECOND(fmt != NULL);
 
-	if (foreground == 0) {
+	if (foreground == 0 || use_syslog == 1) {
 		vsyslog(prio, fmt, args);
 	} else {
 		(void)clock_gettime(CLOCK_REALTIME, &ts);
