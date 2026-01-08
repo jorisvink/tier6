@@ -47,7 +47,7 @@ static volatile sig_atomic_t	sig_recv = -1;
 /* Are we running in foreground mode or not. */
 static int			foreground = 1;
 
-/* Write to syslog output, even if in foreground mode. */
+/* Log using syslog, even if in foreground mode. */
 static int			use_syslog = 0;
 
 /*
