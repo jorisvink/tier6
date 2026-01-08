@@ -47,7 +47,7 @@ static volatile sig_atomic_t	sig_recv = -1;
 /* Are we running in foreground mode or not. */
 static int			foreground = 1;
 
-/* Will we write output to syslog or not. */
+/* Write to syslog output, even if in foreground mode. */
 static int			use_syslog = 0;
 
 /*
@@ -60,7 +60,7 @@ usage(void)
 	printf("\n");
 	printf("options:\n");
 	printf("  -d  Daemonize the process, running in the background.\n");
-	printf("  -s  Write output to syslog.\n");
+	printf("  -s  Write output to syslog even in foreground mode.\n");
 	printf("  -h  This help text.\n");
 	printf("\n");
 	printf("If no configuration is given the default ");
