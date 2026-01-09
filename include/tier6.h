@@ -165,6 +165,7 @@ struct tier6 {
 	u_int64_t		flock;
 	u_int32_t		cs_id;
 	u_int8_t		kek_id;
+	u_int16_t		mtu;
 
 	char			*runas;
 	char			*tapname;

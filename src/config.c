@@ -48,6 +48,7 @@ static void	config_parse_kek_path(char *);
 static void	config_parse_cosk_path(char *);
 static void	config_parse_cathedral(char *);
 static void	config_parse_remembrance(char *);
+static void	config_parse_mtu(char *);
 static void	config_build_default_paths(void);
 
 static char	*config_read_line(FILE *, char *, size_t);
@@ -68,6 +69,7 @@ static struct {
 	{ "tapname",		config_parse_tapname },
 	{ "cathedral",		config_parse_cathedral },
 	{ "remembrance",	config_parse_remembrance },
+	{ "mtu",		config_parse_mtu },
 
 	{ NULL, NULL },
 };
@@ -124,6 +126,9 @@ tier6_config(const char *path)
 
 	if (t6->flock == 0)
 		fatal("no flock was specified in the configuration");
+
+	if (t6->mtu == 0)
+		t6->mtu = 1420;
 
 	if (t6->cathedral.addr.sin_addr.s_addr == 0)
 		fatal("no cathedral was specified in the configuration");
@@ -335,6 +340,27 @@ config_parse_remembrance(char *opt)
 
 	if ((t6->remembrance = strdup(opt)) == NULL)
 		fatal("strdup failed");
+}
+
+/*
+ * Parse the mtu configuration option.
+ */
+static void
+config_parse_mtu(char *opt)
+{
+	PRECOND(opt != NULL);
+
+	u_int16_t mtu;
+
+	if (sscanf(opt, "%hu", &mtu) != 1)
+		fatal("mtu <int> (16-bit number)");
+
+	if (mtu >= 1500)
+		mtu = 1500;
+	else if (mtu <= 576)
+		mtu = 576;
+
+	t6->mtu = mtu;
 }
 
 /*
