@@ -318,7 +318,7 @@ darwin_feth_create(int fd, const char *ifc)
 	darwin_ioctl(fd, SIOCPROTOATTACH, &ifr);
 	darwin_ioctl(fd, SIOCSIFFLAGS, &ifr);
 
-	if (strcmp(FETH_PRIMARY_IFC, ifc) == 0) {
+	if (!strcmp(FETH_PRIMARY_IFC, ifc)) {
 		ifr.ifr_mtu = t6->mtu;
 		darwin_ioctl(fd, SIOCSIFMTU, &ifr);
 	}

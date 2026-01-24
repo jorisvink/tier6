@@ -38,6 +38,7 @@
 
 static void	config_check_file(const char *);
 
+static void	config_parse_mtu(char *);
 static void	config_parse_runas(char *);
 static void	config_parse_flock(char *);
 static void	config_parse_cs_id(char *);
@@ -48,7 +49,6 @@ static void	config_parse_kek_path(char *);
 static void	config_parse_cosk_path(char *);
 static void	config_parse_cathedral(char *);
 static void	config_parse_remembrance(char *);
-static void	config_parse_mtu(char *);
 static void	config_build_default_paths(void);
 
 static char	*config_read_line(FILE *, char *, size_t);
@@ -64,12 +64,12 @@ static struct {
 	{ "kek-id",		config_parse_kek_id },
 	{ "kek-path",		config_parse_kek_path },
 
+	{ "mtu",		config_parse_mtu },
 	{ "runas",		config_parse_runas },
 	{ "flock",		config_parse_flock },
 	{ "tapname",		config_parse_tapname },
 	{ "cathedral",		config_parse_cathedral },
 	{ "remembrance",	config_parse_remembrance },
-	{ "mtu",		config_parse_mtu },
 
 	{ NULL, NULL },
 };
