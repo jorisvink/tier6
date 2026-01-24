@@ -236,7 +236,7 @@ openbsd_tap_create(void)
 	ifr.ifr_mtu = t6->mtu;
 
 	if (ioctl(fd, SIOCSIFMTU, &ifr) == -1) {
-		fatal("failed to set mtu (%d) on tap device %s: %s"
+		fatal("failed to set mtu (%d) on tap device %s: %s",
 		    t6->mtu, t6->tapname, errno_s);
 	}
 
