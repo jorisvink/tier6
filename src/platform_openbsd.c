@@ -48,6 +48,9 @@ static struct tier6_io	tap_io;
 /* The tap fd. */
 static int		tap_fd = -1;
 
+/* The tap device name (tap0, tap1, ...) */
+static char		*device = NULL;
+
 /*
  * Initialise the OpenBSD platform.
  */
@@ -146,18 +149,6 @@ tier6_platform_io_wait(void)
 }
 
 /*
- * Write a frame from our tap device.
- */
-ssize_t
-tier6_platform_tap_write(const void *data, size_t len)
-{
-	PRECOND(data != NULL);
-	PRECOND(len > 0);
-
-	return (write(tap_fd, data, len));
-}
-
-/*
  * Schedule the given fd into our event loop, and tie it together
  * with the user data pointer.
  */
@@ -173,6 +164,60 @@ tier6_platform_io_schedule(int fd, void *udata)
 
 	if (kevent(kfd, event, 1, NULL, 0, NULL) == -1 && errno != ENOENT)
 		fatal("kevent: %s", errno_s);
+}
+
+/*
+ * Write a frame from our tap device.
+ */
+ssize_t
+tier6_platform_tap_write(const void *data, size_t len)
+{
+	PRECOND(data != NULL);
+	PRECOND(len > 0);
+
+	return (write(tap_fd, data, len));
+}
+
+/*
+ * Configure the tap interface.
+ */
+void
+tier6_platform_tap_configure(struct in_addr *addr)
+{
+	int			fd;
+	struct ifaliasreq	ifra;
+	struct sockaddr_in	sin, mask;
+
+	PRECOND(addr != NULL);
+
+	memset(&ifra, 0, sizeof(ifra));
+
+	if (strlcpy(ifra.ifra_name, device,
+	    sizeof(ifra.ifra_name)) >= sizeof(ifra.ifra_name))
+		fatal("ifc '%s' is too long", device);
+
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		fatal("socket: %s", errno_s);
+
+	memset(&sin, 0, sizeof(sin));
+	memset(&mask, 0, sizeof(mask));
+
+	mask.sin_family = AF_INET;
+	mask.sin_len = sizeof(mask);
+	mask.sin_addr.s_addr = htonl(0xffffff00);
+
+	sin.sin_family = AF_INET;
+	sin.sin_len = sizeof(sin);
+	memcpy(&sin.sin_addr, addr, sizeof(*addr));
+
+	memcpy(&ifra.ifra_addr, &sin, sizeof(sin));
+	memcpy(&ifra.ifra_mask, &mask, sizeof(mask));
+	memcpy(&ifra.ifra_broadaddr, &sin, sizeof(sin));
+
+	if (ioctl(fd, SIOCAIFADDR, &ifra) == -1)
+		fatal("ioctl(SIOCAIFADDR): %s", errno_s);
+
+	(void)close(fd);
 }
 
 /*
@@ -200,10 +245,13 @@ openbsd_tap_create(void)
 
 	tier6_log(LOG_INFO, "using tap device '%s'", path);
 
+	if ((device = strdup(&path[5])) == NULL)
+		fatal("strdup");
+
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		fatal("socket: %s", errno_s);
 
-	if (strlcpy(ifr.ifr_name, &path[5],
+	if (strlcpy(ifr.ifr_name, device,
 	    sizeof(ifr.ifr_name)) >= sizeof(ifr.ifr_name))
 		fatal("failed to copy interface name");
 

@@ -135,7 +135,6 @@ tier6_platform_init(void)
 
 	darwin_feth_setup();
 
-	tier6_log(LOG_INFO, "ignoring tapname '%s'", t6->tapname);
 	tier6_log(LOG_INFO, "using feth device '%s'", FETH_PRIMARY_IFC);
 }
 
@@ -215,6 +214,48 @@ tier6_platform_tap_write(const void *data, size_t len)
 	PRECOND(len > 0);
 
 	return (write(ndrv_fd, data, len));
+}
+
+/*
+ * Configure the tap interface.
+ */
+void
+tier6_platform_tap_configure(struct in_addr *addr)
+{
+	int			fd;
+	struct ifaliasreq	ifra;
+	struct sockaddr_in	sin, mask;
+
+	PRECOND(addr != NULL);
+
+	memset(&ifra, 0, sizeof(ifra));
+
+	if (strlcpy(ifra.ifra_name, FETH_PRIMARY_IFC,
+	    sizeof(ifra.ifra_name)) >= sizeof(ifra.ifra_name))
+		fatal("ifc '%s' is too long", FETH_PRIMARY_IFC);
+
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		fatal("socket: %s", errno_s);
+
+	memset(&sin, 0, sizeof(sin));
+	memset(&mask, 0, sizeof(mask));
+
+	mask.sin_family = AF_INET;
+	mask.sin_len = sizeof(mask);
+	mask.sin_addr.s_addr = htonl(0xffffff00);
+
+	sin.sin_family = AF_INET;
+	sin.sin_len = sizeof(sin);
+	memcpy(&sin.sin_addr, addr, sizeof(*addr));
+
+	memcpy(&ifra.ifra_addr, &sin, sizeof(sin));
+	memcpy(&ifra.ifra_mask, &mask, sizeof(mask));
+	memcpy(&ifra.ifra_broadaddr, &sin, sizeof(sin));
+
+	if (ioctl(fd, SIOCAIFADDR, &ifra) == -1)
+		fatal("ioctl(SIOCAIFADDR): %s", errno_s);
+
+	(void)close(fd);
 }
 
 /*

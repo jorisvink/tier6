@@ -205,6 +205,9 @@ config_parse_kek_id(char *opt)
 
 	if (sscanf(opt, "%hhx", &t6->kek_id) != 1)
 		fatal("kek-id <hex> (8-bit number)");
+
+	if (t6->kek_id == 0 || t6->kek_id == 0xff)
+		fatal("kek-id must not be 0 or 255");
 }
 
 /*

@@ -145,6 +145,45 @@ tier6_platform_tap_write(const void *data, size_t len)
 }
 
 /*
+ * Configure the tap interface.
+ */
+void
+tier6_platform_tap_configure(struct in_addr *addr)
+{
+	struct ifreq		ifr;
+	struct sockaddr_in	sin;
+	int			fd, len;
+
+	PRECOND(addr != NULL);
+
+	memset(&ifr, 0, sizeof(ifr));
+
+	len = snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", t6->tapname);
+	if (len == -1 || (size_t)len >= sizeof(ifr.ifr_name))
+		fatal("tap interface name '%s' too large", t6->tapname);
+
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		fatal("socket: %s", errno_s);
+
+	memset(&sin, 0, sizeof(sin));
+	sin.sin_family = AF_INET;
+
+	memcpy(&sin.sin_addr, addr, sizeof(*addr));
+	memcpy(&ifr.ifr_addr, &sin, sizeof(sin));
+
+	if (ioctl(fd, SIOCSIFADDR, &ifr) == -1)
+		fatal("ioctl(SIOCSIFADDR): %s", errno_s);
+
+	sin.sin_addr.s_addr = htonl(0xffffff00);
+	memcpy(&ifr.ifr_addr, &sin, sizeof(sin));
+
+	if (ioctl(fd, SIOCSIFNETMASK, &ifr) == -1)
+		fatal("ioctl(SIOCSIFNETMASK): %s", errno_s);
+
+	(void)close(fd);
+}
+
+/*
  * Create our name tap interface based on the tapname configuration.
  */
 static void
