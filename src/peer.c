@@ -27,7 +27,7 @@
 #include "tier6.h"
 
 /* The maximum age in seconds a MAC is valid. */
-#define PEER_MAC_AGE_MAX	10
+#define PEER_MAC_AGE_MAX	(60 * 20)
 
 static void	peer_create(u_int8_t);
 static void	peer_delete(u_int8_t);
@@ -542,15 +542,35 @@ static void
 peer_mac_register(struct tier6_peer *peer,
     const struct tier6_ether *eth, int fixed)
 {
+	struct tier6_peer	*p0;
 	struct tier6_mac	*mac;
 
 	PRECOND(peer != NULL);
 	PRECOND(eth != NULL);
 	PRECOND(fixed == 0 || fixed == 1);
 
-	LIST_FOREACH(mac, &peer->macs, list) {
-		if (!memcmp(mac->addr, eth->src, TIER6_ETHERNET_MAC_LEN))
-			break;
+	LIST_FOREACH(p0, &peers, list) {
+		LIST_FOREACH(mac, &p0->macs, list) {
+			if (!memcmp(mac->addr,
+			    eth->src, TIER6_ETHERNET_MAC_LEN))
+				break;
+		}
+
+		if (mac == NULL)
+			continue;
+
+		if (p0 != peer) {
+			tier6_log(LOG_INFO,
+			    "[mac] %02x:%02x:%02x:%02x:%02x:%02x moved %u->%u",
+			    mac->addr[0], mac->addr[1], mac->addr[2],
+			    mac->addr[3], mac->addr[4], mac->addr[5],
+			    p0->id, peer->id);
+
+			LIST_REMOVE(mac, list);
+			LIST_INSERT_HEAD(&peer->macs, mac, list);
+		}
+
+		break;
 	}
 
 	if (mac != NULL) {
