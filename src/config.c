@@ -38,6 +38,7 @@
 
 static void	config_check_file(const char *);
 
+static void	config_parse_mtu(char *);
 static void	config_parse_runas(char *);
 static void	config_parse_flock(char *);
 static void	config_parse_cs_id(char *);
@@ -63,6 +64,7 @@ static struct {
 	{ "kek-id",		config_parse_kek_id },
 	{ "kek-path",		config_parse_kek_path },
 
+	{ "mtu",		config_parse_mtu },
 	{ "runas",		config_parse_runas },
 	{ "flock",		config_parse_flock },
 	{ "tapname",		config_parse_tapname },
@@ -124,6 +126,9 @@ tier6_config(const char *path)
 
 	if (t6->flock == 0)
 		fatal("no flock was specified in the configuration");
+
+	if (t6->mtu == 0)
+		t6->mtu = 1420;
 
 	if (t6->cathedral.addr.sin_addr.s_addr == 0)
 		fatal("no cathedral was specified in the configuration");
@@ -200,6 +205,9 @@ config_parse_kek_id(char *opt)
 
 	if (sscanf(opt, "%hhx", &t6->kek_id) != 1)
 		fatal("kek-id <hex> (8-bit number)");
+
+	if (t6->kek_id == 0 || t6->kek_id == 0xff)
+		fatal("kek-id must not be 0 or 255");
 }
 
 /*
@@ -335,6 +343,27 @@ config_parse_remembrance(char *opt)
 
 	if ((t6->remembrance = strdup(opt)) == NULL)
 		fatal("strdup failed");
+}
+
+/*
+ * Parse the mtu configuration option.
+ */
+static void
+config_parse_mtu(char *opt)
+{
+	PRECOND(opt != NULL);
+
+	u_int16_t mtu;
+
+	if (sscanf(opt, "%hu", &mtu) != 1)
+		fatal("mtu <int> (16-bit number)");
+
+	if (mtu >= 1500)
+		mtu = 1500;
+	else if (mtu <= 576)
+		mtu = 576;
+
+	t6->mtu = mtu;
 }
 
 /*

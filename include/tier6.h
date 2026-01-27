@@ -165,6 +165,7 @@ struct tier6 {
 	u_int64_t		flock;
 	u_int32_t		cs_id;
 	u_int8_t		kek_id;
+	u_int16_t		mtu;
 
 	char			*runas;
 	char			*tapname;
@@ -217,6 +218,8 @@ extern struct tier6	*t6;
 /* platform bits. */
 void	tier6_platform_init(void);
 void	tier6_platform_sandbox(void);
+
+void	tier6_platform_tap_configure(struct in_addr *);
 ssize_t	tier6_platform_tap_write(const void *, size_t);
 
 void	tier6_platform_io_wait(void);

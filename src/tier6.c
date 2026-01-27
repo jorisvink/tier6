@@ -28,8 +28,13 @@
 
 #include "tier6.h"
 
+#include <libkyrka/libnyfe.h>
+
 /* The default tier6 configuration path. */
 #define TIER6_DEFAULT_CONFIG		"/etc/tier6.conf"
+
+/* The KMAC256 label for inet autoconf. */
+#define TIER6_INET_AUTOCONF		"TIER6.INET.AUTOCONF"
 
 static void	usage(void) __attribute__((noreturn));
 static void	version(void) __attribute__((noreturn));
@@ -37,6 +42,8 @@ static void	version(void) __attribute__((noreturn));
 static void	signal_trap(int);
 static void	signal_hdlr(int);
 static void	signal_memfault(int);
+
+static void	inet_autoconf(void);
 
 /* The global tier6 state. */
 struct tier6			*t6;
@@ -47,6 +54,9 @@ static volatile sig_atomic_t	sig_recv = -1;
 /* Are we running in foreground mode or not. */
 static int			foreground = 1;
 
+/* Log using syslog, even if in foreground mode. */
+static int			use_syslog = 0;
+
 /*
  * Show tier6 usage.
  */
@@ -56,7 +66,9 @@ usage(void)
 	printf("Usage: tier6 [options] [config]\n");
 	printf("\n");
 	printf("options:\n");
+	printf("  -a  Auto configure IPv4 on the interface.\n");
 	printf("  -d  Daemonize the process, running in the background.\n");
+	printf("  -s  Write output to syslog even in foreground mode.\n");
 	printf("  -h  This help text.\n");
 	printf("\n");
 	printf("If no configuration is given the default ");
@@ -83,14 +95,21 @@ main(int argc, char **argv)
 	struct timespec		ts;
 	sigset_t		sigset;
 	static const char	*config;
-	int			ch, running;
+	int			ch, running, autoconf;
 
+	autoconf = 0;
 	config = NULL;
 
-	while ((ch = getopt(argc, argv, "dhv")) != -1) {
+	while ((ch = getopt(argc, argv, "adhsv")) != -1) {
 		switch (ch) {
+		case 'a':
+			autoconf = 1;
+			break;
 		case 'd':
 			foreground = 0;
+			break;
+		case 's':
+			use_syslog = 1;
 			break;
 		case 'v':
 			version();
@@ -131,8 +150,13 @@ main(int argc, char **argv)
 	tier6_peer_init();
 	tier6_discovery_init();
 
-	if (foreground == 0) {
+	if (foreground == 0 || use_syslog == 1)
 		openlog("tier6", LOG_NDELAY | LOG_PID, LOG_DAEMON);
+
+	if (autoconf)
+		inet_autoconf();
+
+	if (foreground == 0) {
 		if (daemon(1, 0) == -1)
 			fatal("daemon: %s", errno_s);
 	}
@@ -227,7 +251,7 @@ tier6_logv(int prio, const char *fmt, va_list args)
 	PRECOND(prio >= 0);
 	PRECOND(fmt != NULL);
 
-	if (foreground == 0) {
+	if (foreground == 0 || use_syslog == 1) {
 		vsyslog(prio, fmt, args);
 	} else {
 		(void)clock_gettime(CLOCK_REALTIME, &ts);
@@ -295,6 +319,35 @@ fatal(const char *fmt, ...)
 	va_end(args);
 
 	exit(1);
+}
+
+/*
+ * Auto configure inet on the interface based on the flock and kek-id.
+ * The first octet is always 10, followed by 2 octets from the derivation
+ * and finally the last octet is set to the kek-id.
+ */
+static void
+inet_autoconf(void)
+{
+	struct nyfe_kmac256	km;
+	struct in_addr		addr;
+	u_int8_t		zeroes[32], okm[4];
+
+	nyfe_mem_zero(zeroes, sizeof(zeroes));
+
+	nyfe_kmac256_init(&km, zeroes, sizeof(zeroes),
+	    TIER6_INET_AUTOCONF, sizeof(TIER6_INET_AUTOCONF) - 1);
+	nyfe_kmac256_update(&km, &t6->flock, sizeof(t6->flock));
+	nyfe_kmac256_final(&km, okm, sizeof(okm));
+
+	memcpy(&addr.s_addr, okm, sizeof(okm));
+
+	addr.s_addr &= 0x00ffff00;
+	addr.s_addr |= 10;
+	addr.s_addr |= (t6->kek_id << 24);
+
+	tier6_platform_tap_configure(&addr);
+	tier6_log(LOG_INFO, "autoconf inet %s/24", inet_ntoa(addr));
 }
 
 /*
