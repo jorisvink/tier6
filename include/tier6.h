@@ -148,6 +148,7 @@ struct tier6_peer {
 	struct sockaddr_in		addr;
 	struct tier6_cathedral		cathedral;
 
+	time_t				alive;
 	time_t				hb_next;
 	u_int32_t			hb_ticks;
 	u_int32_t			hb_frequency;
