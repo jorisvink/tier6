@@ -553,6 +553,8 @@ peer_mac_register(struct tier6_peer *peer,
 	PRECOND(eth != NULL);
 	PRECOND(fixed == 0 || fixed == 1);
 
+	mac = NULL;
+
 	LIST_FOREACH(p0, &peers, list) {
 		LIST_FOREACH(mac, &p0->macs, list) {
 			if (!memcmp(mac->addr,
