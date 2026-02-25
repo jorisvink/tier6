@@ -16,12 +16,16 @@
 
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <sys/prctl.h>
+#include <sys/syscall.h>
 #include <sys/epoll.h>
 
 #include <arpa/inet.h>
 
 #include <net/if.h>
+
 #include <linux/if_tun.h>
+#include <linux/seccomp.h>
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -30,12 +34,90 @@
 #include <unistd.h>
 
 #include "tier6.h"
+#include "seccomp.h"
 
 /* Maximum number of events in one single epoll_wait() call. */
 #define EVENTS_MAX	256
 
+/* Default seccomp stuff. */
+#if defined(__x86_64__)
+#define SECCOMP_AUDIT_ARCH		AUDIT_ARCH_X86_64
+#elif defined(__aarch64__)
+#define SECCOMP_AUDIT_ARCH		AUDIT_ARCH_AARCH64
+#elif defined(__arm)
+#define SECCOMP_AUDIT_ARCH		AUDIT_ARCH_ARM
+#elif defined(__riscv)
+#define SECCOMP_AUDIT_ARCH		AUDIT_ARCH_RISCV64
+#else
+#error "unsupported architecture"
+#endif
+
+#define SECCOMP_KILL_POLICY		SECCOMP_RET_KILL
+
 static void		linux_tap_io(void *);
 static void		linux_tap_create(void);
+static void		linux_sandbox_seccomp(void);
+
+/*
+ * The seccomp bpf program its prologue.
+ *
+ * Verifies that the running architecture matches the one we're built for
+ * and preps the system call number to be verified.
+ */
+static struct sock_filter filter_prologue[] = {
+	KORE_BPF_LOAD(arch, 0),
+	KORE_BPF_CMP(SECCOMP_AUDIT_ARCH, 1, 0),
+	KORE_BPF_RET(SECCOMP_RET_KILL),
+	KORE_BPF_LOAD(nr, 0),
+};
+
+/*
+ * The seccomp bpf program its epilogue.
+ *
+ * This applies the selected seccomp policy if none of the system
+ * calls matched the filters.
+ */
+static struct sock_filter filter_epilogue[] = {
+	BPF_STMT(BPF_RET+BPF_K, SECCOMP_KILL_POLICY)
+};
+
+/*
+ * Our seccomp policy.
+ */
+static struct sock_filter tier6_seccomp_filter[] = {
+	KORE_SYSCALL_ALLOW(epoll_ctl),
+	KORE_SYSCALL_ALLOW(epoll_wait),
+	KORE_SYSCALL_ALLOW(epoll_pwait),
+	KORE_SYSCALL_ALLOW(epoll_pwait2),
+	KORE_SYSCALL_ALLOW(epoll_create),
+	KORE_SYSCALL_ALLOW(epoll_create1),
+
+	KORE_SYSCALL_ALLOW(read),
+	KORE_SYSCALL_ALLOW(write),
+	KORE_SYSCALL_ALLOW(close),
+	KORE_SYSCALL_ALLOW(sendto),
+	KORE_SYSCALL_ALLOW(recvfrom),
+	KORE_SYSCALL_ALLOW_ARG(socket, 0, AF_INET),
+
+	KORE_SYSCALL_ALLOW(unlink),
+	KORE_SYSCALL_ALLOW(rename),
+
+	KORE_SYSCALL_ALLOW(brk),
+	KORE_SYSCALL_ALLOW(fstat),
+	KORE_SYSCALL_ALLOW(fcntl),
+	KORE_SYSCALL_ALLOW(open),
+	KORE_SYSCALL_ALLOW(openat),
+	KORE_SYSCALL_ALLOW(getpid),
+	KORE_SYSCALL_ALLOW(getrandom),
+	KORE_SYSCALL_ALLOW(exit_group),
+	KORE_SYSCALL_ALLOW(rt_sigreturn),
+	KORE_SYSCALL_ALLOW(clock_gettime),
+	KORE_SYSCALL_ALLOW(rt_sigprocmask),
+	KORE_SYSCALL_ALLOW(clock_nanosleep),
+	KORE_SYSCALL_ALLOW(restart_syscall),
+
+	KORE_SYSCALL_ALLOW_ARG(write, 0, STDOUT_FILENO),
+};
 
 /* The epoll fd use. */
 static int		efd = -1;
@@ -45,6 +127,9 @@ static struct tier6_io	tap_io;
 
 /* The tap fd. */
 static int		tap_fd = -1;
+
+/* Is seccomp tracing enabled or not? */
+int			linux_seccomp_tracing = 0;
 
 /*
  * Initialise the Linux platform.
@@ -71,6 +156,7 @@ void
 tier6_platform_sandbox(void)
 {
 	tier6_drop_user();
+	linux_sandbox_seccomp();
 }
 
 /*
@@ -275,4 +361,48 @@ linux_tap_io(void *udata)
 
 		tier6_peer_output(frame, ret);
 	}
+}
+
+/*
+ * Apply our seccomp rules to our tier6 process.
+ */
+static void
+linux_sandbox_seccomp(void)
+{
+	struct sock_filter		*sf;
+	struct sock_fprog		prog;
+	size_t				len, idx, off;
+
+	/* If tracing is enabled, change the policy to SECCOMP_RET_LOG. */
+	if (linux_seccomp_tracing) {
+		filter_epilogue[0].k = SECCOMP_RET_LOG;
+		tier6_log(LOG_INFO, "seccomping is logging");
+	}
+
+	len = KORE_FILTER_LEN(filter_prologue) +
+	    KORE_FILTER_LEN(tier6_seccomp_filter) +
+	    KORE_FILTER_LEN(filter_epilogue);
+
+	if ((sf = calloc(len, sizeof(*sf))) == NULL)
+		fatal("calloc(%zu): %s", len, errno_s);
+
+	off = 0;
+
+	for (idx = 0; idx < KORE_FILTER_LEN(filter_prologue); idx++)
+		sf[off++] = filter_prologue[idx];
+
+	for (idx = 0; idx < KORE_FILTER_LEN(tier6_seccomp_filter); idx++)
+		sf[off++] = tier6_seccomp_filter[idx];
+
+	for (idx = 0; idx < KORE_FILTER_LEN(filter_epilogue); idx++)
+		sf[off++] = filter_epilogue[idx];
+
+	if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1)
+		fatal("prctl(privs): %s", errno_s);
+
+	prog.len = len;
+	prog.filter = sf;
+
+	if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog) == -1)
+		fatal("prctl(seccomp): %s", errno_s);
 }

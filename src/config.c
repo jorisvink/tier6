@@ -51,6 +51,10 @@ static void	config_parse_cathedral(char *);
 static void	config_parse_remembrance(char *);
 static void	config_build_default_paths(void);
 
+#if defined(__linux__)
+static void	config_parse_seccomp_tracing(char *);
+#endif
+
 static char	*config_read_line(FILE *, char *, size_t);
 
 static struct {
@@ -70,6 +74,10 @@ static struct {
 	{ "tapname",		config_parse_tapname },
 	{ "cathedral",		config_parse_cathedral },
 	{ "remembrance",	config_parse_remembrance },
+
+#if defined(__linux__)
+	{ "seccomp_tracing",	config_parse_seccomp_tracing },
+#endif
 
 	{ NULL, NULL },
 };
@@ -443,3 +451,22 @@ config_build_default_paths(void)
 		tier6_log(LOG_INFO, "loading kek from default path");
 	}
 }
+
+#if defined(__linux__)
+
+/*
+ * Parse the linux specific seccomp_tracing option.
+ */
+static void
+config_parse_seccomp_tracing(char *opt)
+{
+	if (!strcmp(opt, "yes")) {
+		linux_seccomp_tracing = 1;
+	} else if (!strcmp(opt, "no")) {
+		linux_seccomp_tracing = 0;
+	} else {
+		fatal("seccomp_tracing invalid, yes|no option");
+	}
+}
+
+#endif

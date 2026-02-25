@@ -185,6 +185,11 @@ struct tier6 {
 extern const char	*tier6_build_rev;
 extern const char	*tier6_build_date;
 
+/* from src/platform_linux.c */
+#if defined(__linux__)
+extern int		linux_seccomp_tracing;
+#endif
+
 /* src/config.c */
 void	tier6_config(const char *);
 
