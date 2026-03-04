@@ -159,10 +159,13 @@ struct tier6_peer {
 	LIST_ENTRY(tier6_peer)		list;
 };
 
+#define TIER6_FLAG_ENCAPSULATE		(1 << 0)
+
 /*
  * Global tier6 data structure holding configuration etc.
  */
 struct tier6 {
+	u_int32_t		flags;
 	u_int64_t		flock;
 	u_int32_t		cs_id;
 	u_int8_t		kek_id;
@@ -177,6 +180,7 @@ struct tier6 {
 	char			*cosk_path;
 
 	time_t			now;
+	u_int8_t		encap[32];
 
 	struct tier6_cathedral	cathedral;
 };
@@ -211,6 +215,7 @@ void	tier6_remembrance_save(struct kyrka_event_remembrance *);
 /* src/tier6.c */
 void	tier6_drop_user(void);
 void	tier6_socket_nonblock(int);
+void	tier6_set_encapsulation(KYRKA *);
 void	tier6_log(int, const char *, ...)
 	    __attribute__((format (printf, 2, 3)));
 void	tier6_logv(int, const char *, va_list);

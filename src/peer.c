@@ -250,6 +250,8 @@ peer_create(u_int8_t id)
 		    kyrka_last_error(peer->ctx));
 	}
 
+	tier6_set_encapsulation(peer->ctx);
+
 	LIST_INSERT_HEAD(&peers, peer, list);
 
 	tier6_log(LOG_INFO, "[peer=%02x] tunnel created (%s)", id,

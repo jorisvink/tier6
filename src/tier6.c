@@ -287,6 +287,21 @@ tier6_socket_nonblock(int fd)
 }
 
 /*
+ * Turn on encapsulation on a KYRKA context if required.
+ */
+void
+tier6_set_encapsulation(KYRKA *ctx)
+{
+	PRECOND(ctx != NULL);
+
+	if (!(t6->flags & TIER6_FLAG_ENCAPSULATE))
+		return;
+
+	if (kyrka_encap_key_load(ctx, t6->encap, sizeof(t6->encap)) == -1)
+		fatal("kyrka_encap_key_load: %d", kyrka_last_error(ctx));
+}
+
+/*
  * Helper function that takes a sockaddr_in and returns a pointer
  * to a human readable ipv4 address:port string.
  */

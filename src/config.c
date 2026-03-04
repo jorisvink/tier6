@@ -50,6 +50,7 @@ static void	config_parse_cosk_path(char *);
 static void	config_parse_cathedral(char *);
 static void	config_parse_remembrance(char *);
 static void	config_build_default_paths(void);
+static void	config_parse_encapsulation(char *);
 
 #if defined(__linux__)
 static void	config_parse_seccomp_tracing(char *);
@@ -74,6 +75,7 @@ static struct {
 	{ "tapname",		config_parse_tapname },
 	{ "cathedral",		config_parse_cathedral },
 	{ "remembrance",	config_parse_remembrance },
+	{ "encapsulation",	config_parse_encapsulation },
 
 #if defined(__linux__)
 	{ "seccomp_tracing",	config_parse_seccomp_tracing },
@@ -351,6 +353,40 @@ config_parse_remembrance(char *opt)
 
 	if ((t6->remembrance = strdup(opt)) == NULL)
 		fatal("strdup failed");
+}
+
+/*
+ * Parse the encapsulation configuration option.
+ */
+static void
+config_parse_encapsulation(char *opt)
+{
+	char		hex[5], *ep;
+	size_t		idx, len, j;
+
+	PRECOND(opt != NULL);
+
+	len = strlen(opt);
+	if (len != (sizeof(t6->encap) * 2))
+		fatal("encapsulation key must be a 256-bit hex value");
+
+	j = 0;
+
+	hex[0] = '0';
+	hex[1] = 'x';
+	hex[4] = '\0';
+
+	for (idx = 0; idx < len; idx += 2) {
+		hex[2] = opt[idx];
+		hex[3] = opt[idx + 1];
+
+		errno = 0;
+		t6->encap[j++] = strtoul(hex, &ep, 16);
+		if (errno != 0 || *ep != '\0')
+			fatal("hex byte '%s' invalid", hex);
+	}
+
+	t6->flags |= TIER6_FLAG_ENCAPSULATE;
 }
 
 /*

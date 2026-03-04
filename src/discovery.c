@@ -107,6 +107,8 @@ tier6_discovery_init(void)
 		    kyrka_last_error(liturgy));
 	}
 
+	tier6_set_encapsulation(liturgy);
+
 	tier6_log(LOG_INFO,
 	    "discovery running (%s)", tier6_address(&cathedral.addr));
 }
