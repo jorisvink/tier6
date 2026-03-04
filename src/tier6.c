@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Joris Vink <joris@sanctorum.se>
+ * Copyright (c) 2025-2026 Joris Vink <joris@sanctorum.se>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -284,6 +284,21 @@ tier6_socket_nonblock(int fd)
 
 	if (fcntl(fd, F_SETFL, flags) == -1)
 		fatal("fnctl: %s", errno_s);
+}
+
+/*
+ * Turn on encapsulation on a KYRKA context if required.
+ */
+void
+tier6_set_encapsulation(KYRKA *ctx)
+{
+	PRECOND(ctx != NULL);
+
+	if (!(t6->flags & TIER6_FLAG_ENCAPSULATE))
+		return;
+
+	if (kyrka_encap_key_load(ctx, t6->encap, sizeof(t6->encap)) == -1)
+		fatal("kyrka_encap_key_load: %d", kyrka_last_error(ctx));
 }
 
 /*

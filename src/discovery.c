@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Joris Vink <joris@sanctorum.se>
+ * Copyright (c) 2025-2026 Joris Vink <joris@sanctorum.se>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -106,6 +106,8 @@ tier6_discovery_init(void)
 		fatal("failed to configure cathedral: %d",
 		    kyrka_last_error(liturgy));
 	}
+
+	tier6_set_encapsulation(liturgy);
 
 	tier6_log(LOG_INFO,
 	    "discovery running (%s)", tier6_address(&cathedral.addr));

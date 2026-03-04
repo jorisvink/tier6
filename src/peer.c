@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Joris Vink <joris@sanctorum.se>
+ * Copyright (c) 2025-2026 Joris Vink <joris@sanctorum.se>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,8 +29,11 @@
 /* The maximum age in seconds a MAC is valid. */
 #define PEER_MAC_AGE_MAX	(60 * 20)
 
+/* The age in seconds before we consider a peer timed out. */
+#define PEER_ALIVE_TIMEOUT	45
+
 static void	peer_create(u_int8_t);
-static void	peer_delete(u_int8_t);
+static void	peer_delete(struct tier6_peer *);
 
 static void	peer_io_event(void *);
 static void	peer_io_read(struct tier6_peer *);
@@ -88,7 +91,7 @@ tier6_peer_state(u_int8_t id, u_int8_t state)
 	if (peer == NULL && state == 1)
 		peer_create(id);
 	else if (peer != NULL && state == 0)
-		peer_delete(id);
+		peer_delete(peer);
 }
 
 /*
@@ -247,6 +250,8 @@ peer_create(u_int8_t id)
 		    kyrka_last_error(peer->ctx));
 	}
 
+	tier6_set_encapsulation(peer->ctx);
+
 	LIST_INSERT_HEAD(&peers, peer, list);
 
 	tier6_log(LOG_INFO, "[peer=%02x] tunnel created (%s)", id,
@@ -254,24 +259,20 @@ peer_create(u_int8_t id)
 }
 
 /*
- * Delete an existing tunnel for the given peer.
+ * Delete an existing tunnel for the given peer if the
+ * peer is no longer alive.
  */
 static void
-peer_delete(u_int8_t id)
+peer_delete(struct tier6_peer *peer)
 {
+	u_int8_t		id;
 	struct tier6_mac	*mac;
-	struct tier6_peer	*peer;
 
-	PRECOND(id >= 1);
+	PRECOND(peer != NULL);
 
-	LIST_FOREACH(peer, &peers, list) {
-		if (peer->id == id)
-			break;
-	}
-
-	if (peer == NULL) {
+	if ((t6->now - peer->alive) < PEER_ALIVE_TIMEOUT) {
 		tier6_log(LOG_INFO,
-		    "[peer=%02x] peer does not exist for removal", id);
+		    "[peer=%02x] tunnel not removed, peer is alive", peer->id);
 		return;
 	}
 
@@ -279,6 +280,8 @@ peer_delete(u_int8_t id)
 		LIST_REMOVE(mac, list);
 		free(mac);
 	}
+
+	id = peer->id;
 
 	LIST_REMOVE(peer, list);
 	kyrka_ctx_free(peer->ctx);
@@ -434,6 +437,9 @@ peer_heaven_input(const void *data, size_t len, u_int64_t magic, void *udata)
 	case TIER6_ETHER_TYPE_IPV4:
 	case TIER6_ETHER_TYPE_IPV6:
 		break;
+	case TIER6_ETHER_TYPE_HEARTBEAT:
+		peer->alive = t6->now;
+		return;
 	default:
 		return;
 	}
@@ -549,6 +555,8 @@ peer_mac_register(struct tier6_peer *peer,
 	PRECOND(eth != NULL);
 	PRECOND(fixed == 0 || fixed == 1);
 
+	mac = NULL;
+
 	LIST_FOREACH(p0, &peers, list) {
 		LIST_FOREACH(mac, &p0->macs, list) {
 			if (!memcmp(mac->addr,
@@ -652,6 +660,8 @@ peer_mac_prune(struct tier6_peer *peer)
 static void
 peer_cathedral_check(struct tier6_peer *peer)
 {
+	int		was_cathedral;
+
 	PRECOND(peer != NULL);
 	PRECOND(t6->remembrance != NULL);
 
@@ -660,10 +670,21 @@ peer_cathedral_check(struct tier6_peer *peer)
 		    "[peer=%02x] cathedral timed out (%u)", peer->id,
 		    peer->cathedral.timeout);
 
+		if (peer->addr.sin_addr.s_addr ==
+		    peer->cathedral.addr.sin_addr.s_addr)
+			was_cathedral = 1;
+		else
+			was_cathedral = 0;
+
 		if (tier6_remembrance_cathedral(&peer->cathedral) != -1) {
 			tier6_log(LOG_NOTICE,
 			    "[peer=%02x] switching to cathedral %s",
 			    peer->id, tier6_address(&peer->cathedral.addr));
+
+			if (was_cathedral) {
+				memcpy(&peer->addr, &peer->cathedral.addr,
+				    sizeof(peer->addr));
+			}
 		}
 	}
 }
