@@ -165,7 +165,7 @@ tier6_peer_output(const void *frame, size_t len)
 		    "[peer] ignoring unknown proto %04x", proto);
 		return;
 	}
-	
+
 	LIST_FOREACH(peer, &peers, list) {
 		if (peer_mac_forward(peer, eth->dst, sizeof(eth->dst)) == -1)
 			continue;
