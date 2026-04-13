@@ -47,10 +47,10 @@ static void	peer_mac_register(struct tier6_peer *,
 		    const struct tier6_ether *, int);
 
 static void	peer_kyrka_event(KYRKA *, union kyrka_event *, void *);
-static void	peer_kyrka_send(const void *, size_t, u_int64_t, void *);
+static void	peer_kyrka_send(struct kyrka_packet *, u_int64_t, void *);
 
-static void	peer_heaven_input(const void *, size_t, u_int64_t, void *);
-static void	peer_purgatory_input(const void *, size_t, u_int64_t, void *);
+static void	peer_heaven_input(struct kyrka_packet *, u_int64_t, void *);
+static void	peer_purgatory_input(struct kyrka_packet *, u_int64_t, void *);
 
 /* Our list of active peers. */
 static LIST_HEAD(, tier6_peer)		peers;
@@ -143,9 +143,12 @@ tier6_peer_update(void)
 void
 tier6_peer_output(const void *frame, size_t len)
 {
+	struct kyrka_packet		pkt;
 	const struct tier6_ether	*eth;
+	u_int8_t			*ptr;
 	struct tier6_peer		*peer;
 	u_int16_t			proto;
+	size_t				maxlen;
 
 	PRECOND(frame != NULL);
 	PRECOND(len >= sizeof(*eth));
@@ -170,7 +173,26 @@ tier6_peer_output(const void *frame, size_t len)
 		if (peer_mac_forward(peer, eth->dst, sizeof(eth->dst)) == -1)
 			continue;
 
-		if (kyrka_heaven_input(peer->ctx, frame, len) == -1 &&
+		ptr = kyrka_packet_databuf(peer->ctx, &pkt, &maxlen);
+		if (ptr == NULL)
+			fatal("failed to get peer data buffer");
+
+		if (len > maxlen) {
+			tier6_log(LOG_NOTICE,
+			    "[peer=%02x] frame of %zu too large (max:%zu)",
+			    peer->id, len, maxlen);
+			continue;
+		}
+
+		memcpy(ptr, frame, len);
+		pkt.length = len;
+
+		if (tier6_inet_match(&peer->addr, &peer->cathedral.addr))
+			pkt.shroud = KYRKA_PACKET_SHROUD_CATHEDRAL;
+		else
+			pkt.shroud = KYRKA_PACKET_SHROUD_PEER;
+
+		if (kyrka_heaven_input(peer->ctx, &pkt) == -1 &&
 		    kyrka_last_error(peer->ctx) != KYRKA_ERROR_NO_TX_KEY) {
 			tier6_log(LOG_NOTICE,
 			    "[peer=%02x] kyrka_heaven_input: %d (%zu)",
@@ -250,7 +272,12 @@ peer_create(u_int8_t id)
 		    kyrka_last_error(peer->ctx));
 	}
 
-	tier6_set_encapsulation(peer->ctx);
+	if (t6->flags & TIER6_FLAG_SHROUD) {
+		if (kyrka_shroud_enable(peer->ctx) == -1) {
+			fatal("failed to enable shroud: %d",
+			    kyrka_last_error(peer->ctx));
+		}
+	}
 
 	LIST_INSERT_HEAD(&peers, peer, list);
 
@@ -314,13 +341,23 @@ peer_io_event(void *udata)
 static void
 peer_io_read(struct tier6_peer *peer)
 {
-	ssize_t		ret;
-	u_int8_t	buf[1500];
+	size_t			len;
+	ssize_t			ret;
+	struct sockaddr_in	sin;
+	struct kyrka_packet	pkt;
+	u_int8_t		*ptr;
+	socklen_t		socklen;
 
 	PRECOND(peer != NULL);
 
 	for (;;) {
-		if ((ret = read(peer->fd, buf, sizeof(buf))) == -1) {
+		if ((ptr = kyrka_packet_recvbuf(peer->ctx, &pkt, &len)) == NULL)
+			fatal("failed to get peer receive buffer");
+
+		socklen = sizeof(sin);
+
+		if ((ret = recvfrom(peer->fd, ptr, len, MSG_DONTWAIT,
+		    (struct sockaddr *)&sin, &socklen)) == -1) {
 			if (errno == EINTR)
 				continue;
 			if (errno == EWOULDBLOCK || errno == EAGAIN) {
@@ -333,7 +370,14 @@ peer_io_read(struct tier6_peer *peer)
 		if (ret == 0)
 			continue;
 
-		if (kyrka_purgatory_input(peer->ctx, buf, ret) == -1) {
+		pkt.length = ret;
+
+		if (tier6_inet_match(&sin, &peer->cathedral.addr))
+			pkt.shroud = KYRKA_PACKET_SHROUD_CATHEDRAL;
+		else
+			pkt.shroud = KYRKA_PACKET_SHROUD_PEER;
+
+		if (kyrka_purgatory_input(peer->ctx, &pkt) == -1) {
 			tier6_log(LOG_NOTICE,
 			    "[peer=%02x] kyrka_purgatory_input: %d",
 			    peer->id, kyrka_last_error(peer->ctx));
@@ -387,6 +431,9 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 			    peer->addr.sin_addr.s_addr &&
 			    peer->cathedral.addr.sin_port !=
 			    peer->addr.sin_port) {
+				if (kyrka_p2p_active(peer->ctx, 1) == -1)
+					fatal("failed to set p2p status");
+
 				tier6_log(LOG_INFO,
 				    "[peer=%02x] p2p discovery %s:%u",
 				    peer->id, inet_ntoa(in),
@@ -394,6 +441,9 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 
 				peer->hb_ticks = 15;
 				peer->hb_frequency = 1;
+			} else {
+				if (kyrka_p2p_active(peer->ctx, 0) == -1)
+					fatal("failed to set p2p status");
 			}
 		}
 		break;
@@ -413,22 +463,21 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
  * output the frame onto our tap device.
  */
 static void
-peer_heaven_input(const void *data, size_t len, u_int64_t magic, void *udata)
+peer_heaven_input(struct kyrka_packet *pkt, u_int64_t magic, void *udata)
 {
 	const struct tier6_ether	*eth;
 	struct tier6_peer		*peer;
 	u_int16_t			proto;
 
-	PRECOND(data != NULL);
-	PRECOND(len > 0);
+	PRECOND(pkt != NULL);
 	PRECOND(udata != NULL);
 
 	peer = udata;
 
-	if (len < sizeof(*eth))
+	if (pkt->length < sizeof(*eth))
 		return;
 
-	eth = data;
+	eth = kyrka_packet_data(pkt);
 	proto = ntohs(eth->proto);
 
 	switch (proto) {
@@ -446,7 +495,7 @@ peer_heaven_input(const void *data, size_t len, u_int64_t magic, void *udata)
 
 	peer_mac_register(peer, eth, 0);
 
-	if (tier6_platform_tap_write(data, len) == -1)
+	if (tier6_platform_tap_write(eth, pkt->length) == -1)
 		tier6_log(LOG_NOTICE, "tap write failed: %s", errno_s);
 }
 
@@ -455,15 +504,19 @@ peer_heaven_input(const void *data, size_t len, u_int64_t magic, void *udata)
  * is sent to the current known address for our peer.
  */
 static void
-peer_purgatory_input(const void *data, size_t len, u_int64_t magic, void *udata)
+peer_purgatory_input(struct kyrka_packet *pkt, u_int64_t magic, void *udata)
 {
+	size_t			len;
+	u_int8_t		*data;
 	struct tier6_peer	*peer;
 
-	PRECOND(data != NULL);
-	PRECOND(len > 0);
+	PRECOND(pkt != NULL);
 	PRECOND(udata != NULL);
 
 	peer = udata;
+
+	if ((data = kyrka_packet_sendbuf(peer->ctx, pkt, &len)) == NULL)
+		fatal("failed to get peer send buffer");
 
 	if (sendto(peer->fd, data, len, 0,
 	    (const struct sockaddr *)&peer->addr, sizeof(peer->addr)) == -1) {
@@ -478,14 +531,15 @@ peer_purgatory_input(const void *data, size_t len, u_int64_t magic, void *udata)
  * Callback from libkyrka when ciphertext data is to be sent to our cathedral.
  */
 static void
-peer_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
+peer_kyrka_send(struct kyrka_packet *pkt, u_int64_t magic, void *udata)
 {
+	size_t			len;
 	struct sockaddr_in	sin;
 	u_int16_t		port;
 	struct tier6_peer	*peer;
+	u_int8_t		*data;
 
-	PRECOND(data != NULL);
-	PRECOND(len > 0);
+	PRECOND(pkt != NULL);
 	PRECOND(udata != NULL);
 
 	peer = udata;
@@ -497,6 +551,9 @@ peer_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 	sin.sin_family = AF_INET;
 	sin.sin_port = htobe16(port);
 	sin.sin_addr.s_addr = peer->cathedral.addr.sin_addr.s_addr;
+
+	if ((data = kyrka_packet_sendbuf(peer->ctx, pkt, &len)) == NULL)
+		fatal("failed to get peer cathedral send buffer");
 
 	if (sendto(peer->fd, data, len, 0,
 	    (struct sockaddr *)&sin, sizeof(sin)) == -1) {
@@ -515,7 +572,10 @@ peer_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
 static void
 peer_heartbeat(struct tier6_peer *peer)
 {
-	struct tier6_ether	eth;
+	size_t			len;
+	struct kyrka_packet	pkt;
+	struct tier6_ether	*eth;
+	void			*ptr;
 
 	PRECOND(peer != NULL);
 
@@ -530,10 +590,23 @@ peer_heartbeat(struct tier6_peer *peer)
 			peer->hb_frequency = 5;
 	}
 
-	memset(&eth, 0, sizeof(eth));
-	eth.proto = htons(TIER6_ETHER_TYPE_HEARTBEAT);
+	if ((ptr = kyrka_packet_databuf(peer->ctx, &pkt, &len)) == NULL)
+		fatal("failed to get peer data buffer for heartbeat");
 
-	if (kyrka_heaven_input(peer->ctx, &eth, sizeof(eth)) == -1 &&
+	VERIFY(sizeof(*eth) <= len);
+
+	eth = ptr;
+	memset(eth, 0, sizeof(*eth));
+	eth->proto = htons(TIER6_ETHER_TYPE_HEARTBEAT);
+
+	pkt.length = sizeof(*eth);
+
+	if (tier6_inet_match(&peer->addr, &peer->cathedral.addr))
+		pkt.shroud = KYRKA_PACKET_SHROUD_CATHEDRAL;
+	else
+		pkt.shroud = KYRKA_PACKET_SHROUD_PEER;
+
+	if (kyrka_heaven_input(peer->ctx, &pkt) == -1 &&
 	    kyrka_last_error(peer->ctx) != KYRKA_ERROR_NO_TX_KEY) {
 		tier6_log(LOG_NOTICE, "[peer=%02x] kyrka_heaven_input: %d",
 		    peer->id, kyrka_last_error(peer->ctx));

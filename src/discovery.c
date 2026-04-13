@@ -38,7 +38,7 @@ static void	discovery_io_read(void);
 static void	discovery_io_event(void *);
 
 static void	discovery_kyrka_event(KYRKA *, union kyrka_event *, void *);
-static void	discovery_kyrka_send(const void *, size_t, u_int64_t, void *);
+static void	discovery_kyrka_send(struct kyrka_packet *, u_int64_t, void *);
 
 /* The local i/o event schedule for use in our event loop. */
 static struct tier6_io			io;
@@ -107,7 +107,12 @@ tier6_discovery_init(void)
 		    kyrka_last_error(liturgy));
 	}
 
-	tier6_set_encapsulation(liturgy);
+	if (t6->flags & TIER6_FLAG_SHROUD) {
+		if (kyrka_shroud_enable(liturgy) == -1) {
+			fatal("failed to enable shroud: %d",
+			    kyrka_last_error(liturgy));
+		}
+	}
 
 	tier6_log(LOG_INFO,
 	    "discovery running (%s)", tier6_address(&cathedral.addr));
@@ -165,11 +170,16 @@ discovery_io_event(void *udata)
 static void
 discovery_io_read(void)
 {
-	ssize_t		ret;
-	u_int8_t	buf[1500];
+	size_t			len;
+	ssize_t			ret;
+	struct kyrka_packet	pkt;
+	u_int8_t		*ptr;
 
 	for (;;) {
-		if ((ret = read(fd, buf, sizeof(buf))) == -1) {
+		if ((ptr = kyrka_packet_recvbuf(liturgy, &pkt, &len)) == NULL)
+			fatal("failed to get liturgy receive buffer");
+
+		if ((ret = read(fd, ptr, len)) == -1) {
 			if (errno == EINTR)
 				return;
 			if (errno == EWOULDBLOCK || errno == EAGAIN) {
@@ -182,7 +192,10 @@ discovery_io_read(void)
 		if (ret == 0)
 			continue;
 
-		if (kyrka_purgatory_input(liturgy, buf, ret) == -1) {
+		pkt.length = ret;
+		pkt.shroud = KYRKA_PACKET_SHROUD_CATHEDRAL;
+
+		if (kyrka_purgatory_input(liturgy, &pkt) == -1) {
 			tier6_log(LOG_NOTICE,
 			    "discovery kyrka_purgatory_input: %d",
 			    kyrka_last_error(liturgy));
@@ -213,6 +226,9 @@ discovery_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 	case KYRKA_EVENT_REMEMBRANCE_RECEIVED:
 		tier6_remembrance_save(&evt->remembrance);
 		break;
+	case KYRKA_EVENT_LOGMSG:
+		tier6_log(LOG_INFO, "libkyrka: %s", evt->logmsg.log);
+		break;
 	default:
 		tier6_log(LOG_NOTICE,
 		    "discovery received unexpected event %u", evt->type);
@@ -224,13 +240,18 @@ discovery_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
  * Callback from libkyrka when we have data to be sent to the cathedral.
  */
 static void
-discovery_kyrka_send(const void *data, size_t len, u_int64_t magic, void *udata)
+discovery_kyrka_send(struct kyrka_packet *pkt, u_int64_t magic, void *udata)
 {
-	PRECOND(data != NULL);
-	PRECOND(len > 0);
+	size_t		len;
+	u_int8_t	*ptr;
+
+	PRECOND(pkt != NULL);
 	PRECOND(udata == NULL);
 
-	if (sendto(fd, data, len, 0,
+	if ((ptr = kyrka_packet_sendbuf(liturgy, pkt, &len)) == NULL)
+		fatal("failed to get liturgy sendbuf");
+
+	if (sendto(fd, ptr, len, 0,
 	    (const struct sockaddr *)&cathedral.addr,
 	    sizeof(cathedral.addr)) == -1)
 		tier6_log(LOG_NOTICE, "discovery sendto: %s", errno_s);

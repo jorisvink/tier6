@@ -287,18 +287,19 @@ tier6_socket_nonblock(int fd)
 }
 
 /*
- * Turn on encapsulation on a KYRKA context if required.
+ * Check if the two given inet addresses and ports match.
  */
-void
-tier6_set_encapsulation(KYRKA *ctx)
+int
+tier6_inet_match(struct sockaddr_in *s1, struct sockaddr_in *s2)
 {
-	PRECOND(ctx != NULL);
+	PRECOND(s1 != NULL);
+	PRECOND(s2 != NULL);
 
-	if (!(t6->flags & TIER6_FLAG_ENCAPSULATE))
-		return;
+	if (s1->sin_addr.s_addr == s2->sin_addr.s_addr &&
+	    s1->sin_port == s2->sin_port)
+		return (1);
 
-	if (kyrka_encap_key_load(ctx, t6->encap, sizeof(t6->encap)) == -1)
-		fatal("kyrka_encap_key_load: %d", kyrka_last_error(ctx));
+	return (0);
 }
 
 /*
