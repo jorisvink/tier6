@@ -159,7 +159,7 @@ struct tier6_peer {
 	LIST_ENTRY(tier6_peer)		list;
 };
 
-#define TIER6_FLAG_ENCAPSULATE		(1 << 0)
+#define TIER6_FLAG_SHROUD		(1 << 0)
 
 /*
  * Global tier6 data structure holding configuration etc.
@@ -219,6 +219,7 @@ void	tier6_set_encapsulation(KYRKA *);
 void	tier6_log(int, const char *, ...)
 	    __attribute__((format (printf, 2, 3)));
 void	tier6_logv(int, const char *, va_list);
+int	tier6_inet_match(struct sockaddr_in *, struct sockaddr_in *);
 void	fatal(const char *, ...) __attribute__((format (printf, 1, 2)))
 	    __attribute__((noreturn));
 
