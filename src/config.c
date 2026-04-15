@@ -137,8 +137,12 @@ tier6_config(const char *path)
 	if (t6->flock == 0)
 		fatal("no flock was specified in the configuration");
 
-	if (t6->mtu == 0)
-		t6->mtu = 1420;
+	if (t6->mtu == 0) {
+		if (t6->flags & TIER6_FLAG_SHROUD)
+			t6->mtu = 1374;
+		else
+			t6->mtu = 1420;
+	}
 
 	if (t6->cathedral.addr.sin_addr.s_addr == 0)
 		fatal("no cathedral was specified in the configuration");
