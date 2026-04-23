@@ -44,6 +44,7 @@ static void	config_parse_flock(char *);
 static void	config_parse_cs_id(char *);
 static void	config_parse_shroud(char *);
 static void	config_parse_kek_id(char *);
+static void	config_parse_bridge(char *);
 static void	config_parse_tapname(char *);
 static void	config_parse_cs_path(char *);
 static void	config_parse_kek_path(char *);
@@ -73,6 +74,7 @@ static struct {
 	{ "runas",		config_parse_runas },
 	{ "flock",		config_parse_flock },
 	{ "shroud",		config_parse_shroud },
+	{ "bridge",		config_parse_bridge },
 	{ "tapname",		config_parse_tapname },
 	{ "cathedral",		config_parse_cathedral },
 	{ "remembrance",	config_parse_remembrance },
@@ -249,6 +251,21 @@ config_parse_flock(char *opt)
 
 	if (sscanf(opt, "%" PRIx64, &t6->flock) != 1)
 		fatal("flock <hex> (64-bit number)");
+}
+
+/*
+ * Parse the bridge configuration option.
+ */
+static void
+config_parse_bridge(char *opt)
+{
+	PRECOND(opt != NULL);
+
+	if (t6->bridge != NULL)
+		fatal("bridge already specified");
+
+	if ((t6->bridge = strdup(opt)) == NULL)
+		fatal("strdup failed");
 }
 
 /*

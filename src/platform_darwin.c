@@ -130,6 +130,9 @@ tier6_platform_init(void)
 	PRECOND(bpf_fd == -1);
 	PRECOND(ndrv_fd == -1);
 
+	if (t6->bridge != NULL)
+		fatal("bridge config is not supported on MacOS");
+
 	if ((kfd = kqueue()) == -1)
 		fatal("kqueue: %s", errno_s);
 

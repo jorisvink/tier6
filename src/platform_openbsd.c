@@ -18,12 +18,14 @@
 #include <sys/event.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/sockio.h>
 #include <sys/time.h>
 
 #include <arpa/inet.h>
 
 #include <net/if.h>
 #include <netinet/if_ether.h>
+#include <net/if_bridge.h>
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -38,6 +40,7 @@
 
 static void		openbsd_tap_io(void *);
 static void		openbsd_tap_create(void);
+static void		openbsd_bridge_configure(void);
 
 /* The kqueue() fd. */
 static int		kfd = -1;
@@ -64,6 +67,10 @@ tier6_platform_init(void)
 		fatal("kqueue: %s", errno_s);
 
 	openbsd_tap_create();
+
+	if (t6->bridge != NULL)
+		openbsd_bridge_configure();
+
 	tap_io.handle = openbsd_tap_io;
 
 	tier6_socket_nonblock(tap_fd);
@@ -289,6 +296,52 @@ openbsd_tap_create(void)
 	}
 
 	(void)close(fd);
+}
+
+/*
+ * Create and (or) join the configured bridge interface.
+ */
+static void
+openbsd_bridge_configure(void)
+{
+	int		fd;
+	struct ifreq	ifr;
+	struct ifbreq	ifbr;
+
+	PRECOND(t6->bridge != NULL);
+
+	memset(&ifbr, 0, sizeof(ifbr));
+
+	if (strlcpy(ifr.ifr_name, t6->bridge,
+	    sizeof(ifr.ifr_name)) >= sizeof(ifr.ifr_name))
+		fatal("bridge name '%s' to long", t6->bridge);
+
+	if (strlcpy(ifbr.ifbr_name, t6->bridge,
+	    sizeof(ifbr.ifbr_name)) >= sizeof(ifbr.ifbr_name))
+		fatal("bridge name '%s' to long", t6->bridge);
+
+	if (strlcpy(ifbr.ifbr_ifsname, device,
+	    sizeof(ifbr.ifbr_ifsname)) >= sizeof(ifbr.ifbr_ifsname))
+		fatal("bridge name '%s' to long", t6->bridge);
+
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		fatal("socket: %s", errno_s);
+
+	if (ioctl(fd, SIOCIFCREATE, &ifr) == -1 && errno != EEXIST)
+		fatal("ioctl(SIOCIFCREATE): %s", errno_s);
+
+	if (ioctl(fd, SIOCBRDGADD, &ifbr) == -1) {
+		if (errno != EEXIST)
+			fatal("ioctl(SIOCBRDGADD): %s", errno_s);
+	}
+
+	ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
+	if (ioctl(fd, SIOCSIFFLAGS, &ifr) == -1)
+		fatal("ioctl(SIOCSIFFLAGS): %s", errno_s);
+
+	(void)close(fd);
+
+	tier6_log(LOG_INFO, "added '%s' to '%s'", device, t6->bridge);
 }
 
 /*

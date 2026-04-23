@@ -172,6 +172,7 @@ struct tier6 {
 	u_int16_t		mtu;
 
 	char			*runas;
+	char			*bridge;
 	char			*tapname;
 	char			*remembrance;
 
