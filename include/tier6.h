@@ -78,6 +78,12 @@ extern int daemon(int, int);
 /* Special ethernet type for heartbeats. */
 #define TIER6_ETHER_TYPE_HEARTBEAT	0xdead
 
+/* Special ethernet type for discovery probe. */
+#define TIER6_ETHER_TYPE_DISC_PROBE	0xdeae
+
+/* Special ethernet type for discovery ack. */
+#define TIER6_ETHER_TYPE_DISC_ACK	0xdeaf
+
 /*
  * An ethernet frame header.
  */
@@ -85,6 +91,26 @@ struct tier6_ether {
 	u_int8_t	dst[TIER6_ETHERNET_MAC_LEN];
 	u_int8_t	src[TIER6_ETHERNET_MAC_LEN];
 	u_int16_t	proto;
+} __attribute__((packed));
+
+/* Maximum number of IPv4 addresses we send to our peer in a heartbeat. */
+#define TIER6_HB_IPV4_MAX	32
+
+/*
+ * A heartbeat packet.
+ */
+struct tier6_hb {
+	struct tier6_ether	eth;
+	u_int16_t		port;
+	u_int32_t		ips[TIER6_HB_IPV4_MAX];
+	u_int32_t		masks[TIER6_HB_IPV4_MAX];
+} __attribute__((packed));
+
+/*
+ * A discovery probe/ack.
+ */
+struct tier6_discovery {
+	struct tier6_ether	eth;
 } __attribute__((packed));
 
 /*
@@ -119,13 +145,13 @@ struct tier6_mac {
  * The seconds before we consider a cathedral timed out if we've
  * not heard from it yet.
  */
-#define TIER6_CATHEDRAL_TIMEOUT_INIT	10
+#define TIER6_CATHEDRAL_TIMEOUT_INIT	(10 * 1000)
 
 /*
  * The seconds before we consider a cathedral timed out if we've
  * managed to talk to it before.
  */
-#define TIER6_CATHEDRAL_TIMEOUT		45
+#define TIER6_CATHEDRAL_TIMEOUT		(45 * 1000)
 
 /*
  * A cathedral we are talking to and the last time we heard from it.
@@ -144,6 +170,8 @@ struct tier6_peer {
 
 	int				fd;
 	u_int8_t			id;
+	u_int16_t			port;
+	int				local_discovery;
 
 	struct sockaddr_in		addr;
 	struct tier6_cathedral		cathedral;

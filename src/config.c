@@ -152,8 +152,10 @@ tier6_config(const char *path)
 	if (t6->runas == NULL)
 		fatal("no runas was specified in the configuration");
 
+#if !defined(__APPLE__)
 	if (t6->tapname == NULL)
 		fatal("no tapname was specified in the configuration");
+#endif
 
 	if (t6->cs_path == NULL || t6->kek_path == NULL ||
 	    t6->cosk_path == NULL)

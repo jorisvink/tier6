@@ -94,12 +94,16 @@ static struct sock_filter tier6_seccomp_filter[] = {
 	KORE_SYSCALL_ALLOW(epoll_create),
 	KORE_SYSCALL_ALLOW(epoll_create1),
 
+	KORE_SYSCALL_ALLOW(bind),
 	KORE_SYSCALL_ALLOW(read),
 	KORE_SYSCALL_ALLOW(write),
 	KORE_SYSCALL_ALLOW(close),
 	KORE_SYSCALL_ALLOW(sendto),
+	KORE_SYSCALL_ALLOW(recvmsg),
 	KORE_SYSCALL_ALLOW(recvfrom),
+	KORE_SYSCALL_ALLOW(getsockname),
 	KORE_SYSCALL_ALLOW_ARG(socket, 0, AF_INET),
+	KORE_SYSCALL_ALLOW_ARG(socket, 0, AF_NETLINK),
 
 	KORE_SYSCALL_ALLOW(unlink),
 	KORE_SYSCALL_ALLOW(rename),

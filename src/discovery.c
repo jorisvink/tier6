@@ -129,7 +129,7 @@ tier6_discovery_update(void)
 	if (next_notify > 0 && t6->now < next_notify)
 		return;
 
-	next_notify = t6->now + 1;
+	next_notify = t6->now + 1000;
 
 	if (t6->remembrance != NULL) {
 		if ((t6->now - cathedral.last) > cathedral.timeout) {

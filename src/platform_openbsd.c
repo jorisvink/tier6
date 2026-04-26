@@ -67,6 +67,10 @@ tier6_platform_init(void)
 		fatal("kqueue: %s", errno_s);
 
 	openbsd_tap_create();
+	free(t6->tapname);
+
+	if ((t6->tapname = strdup(device)) == NULL)
+		fatal("strdup failed");
 
 	if (t6->bridge != NULL)
 		openbsd_bridge_configure();

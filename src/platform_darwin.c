@@ -136,6 +136,11 @@ tier6_platform_init(void)
 	if ((kfd = kqueue()) == -1)
 		fatal("kqueue: %s", errno_s);
 
+	free(t6->tapname);
+
+	if ((t6->tapname = strdup(FETH_PRIMARY_IFC)) == NULL)
+		fatal("strdup failed");
+
 	darwin_feth_setup();
 
 	tier6_log(LOG_INFO, "using feth device '%s'", FETH_PRIMARY_IFC);
