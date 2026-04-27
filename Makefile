@@ -98,8 +98,9 @@ $(VERSION).c: force
 		cp $(VERSION)_gen $(VERSION).c; \
 	fi
 
-install: $(BIN)
+install: $(BIN) $(CTL)
 	install -m 555 $(BIN) $(DESTDIR)$(INSTALL_DIR)
+	install -m 555 $(CTL) $(DESTDIR)$(INSTALL_DIR)
 
 clean:
 	rm -f $(VERSION)
