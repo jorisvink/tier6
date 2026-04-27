@@ -664,6 +664,10 @@ peer_heartbeat_send(struct tier6_peer *peer)
 			if (!strcmp(ifa->ifa_name, t6->tapname))
 				continue;
 
+			if (t6->bridge != NULL &&
+			    !strcmp(ifa->ifa_name, t6->bridge))
+				continue;
+
 			if (ifa->ifa_addr == NULL)
 				continue;
 
