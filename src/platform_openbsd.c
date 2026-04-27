@@ -101,6 +101,11 @@ tier6_platform_sandbox(void)
 	if (unveil(t6->cosk_path, "r") == -1)
 		fatal("unveil(%s): %s", t6->cosk_path, errno_s);
 
+	if (t6->control != NULL) {
+		if (unveil("/tmp/tier6ctl.client", "rw") == -1)
+			fatal("unveil(%s): %s", t6->remembrance, errno_s);
+	}
+
 	if (t6->remembrance != NULL) {
 		len = snprintf(tmp, sizeof(tmp), "%s.tmp", t6->remembrance);
 		if (len == -1 || (size_t)len >= sizeof(tmp))
@@ -112,10 +117,10 @@ tier6_platform_sandbox(void)
 		if (unveil(t6->remembrance, "crw") == -1)
 			fatal("unveil(%s): %s", t6->remembrance, errno_s);
 
-		if (pledge("stdio cpath wpath rpath inet", NULL) == -1)
+		if (pledge("stdio cpath wpath rpath inet unix", NULL) == -1)
 			fatal("pledge: %s", errno_s);
 	} else {
-		if (pledge("stdio rpath inet", NULL) == -1)
+		if (pledge("stdio rpath inet unix", NULL) == -1)
 			fatal("pledge: %s", errno_s);
 	}
 }
