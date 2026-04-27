@@ -148,6 +148,7 @@ main(int argc, char **argv)
 	tier6_platform_init();
 
 	tier6_peer_init();
+	tier6_control_init();
 	tier6_discovery_init();
 
 	if (foreground == 0 || use_syslog == 1)

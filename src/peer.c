@@ -213,6 +213,34 @@ tier6_peer_output(const void *frame, size_t len)
 }
 
 /*
+ * Fill in peer information so it can be sent back via the control socket.
+ */
+void
+tier6_peer_info(union tier6_ctl_response *resp)
+{
+	struct tier6_peer	*peer;
+	struct tier6_ctl_peer	*info;
+
+	PRECOND(resp != NULL);
+
+	LIST_FOREACH(peer, &peers, list) {
+		info = &resp->peers.list[peer->id];
+
+		info->state = 1;
+		info->last = peer->alive;
+
+		info->rx_bytes = peer->rx_bytes;
+		info->tx_bytes = peer->tx_bytes;
+
+		info->addr.port = peer->addr.sin_port;
+		info->addr.ip = peer->addr.sin_addr.s_addr;
+
+		info->cathedral.port = peer->cathedral.addr.sin_port;
+		info->cathedral.ip = peer->cathedral.addr.sin_addr.s_addr;
+	}
+}
+
+/*
  * Create a new tunnel for the given peer and schedule it onto
  * our internal event loop.
  */
@@ -395,6 +423,7 @@ peer_io_read(struct tier6_peer *peer)
 			continue;
 
 		pkt.length = ret;
+		peer->rx_bytes += ret;
 
 		if (tier6_inet_match(&sender, &peer->cathedral.addr))
 			pkt.shroud = KYRKA_PACKET_SHROUD_CATHEDRAL;
@@ -572,6 +601,8 @@ peer_purgatory_input(struct kyrka_packet *pkt, u_int64_t magic, void *udata)
 			tier6_log(LOG_INFO,
 			    "[peer=%02x] sendto: %s", peer->id, errno_s);
 		}
+	} else {
+		peer->tx_bytes += len;
 	}
 }
 
@@ -610,6 +641,8 @@ peer_kyrka_send(struct kyrka_packet *pkt, u_int64_t magic, void *udata)
 			    "[peer=%02x] sendto: %s (cathedral)",
 			    peer->id, errno_s);
 		}
+	} else {
+		peer->tx_bytes += len;
 	}
 }
 

@@ -5,6 +5,7 @@ OBJDIR?=obj
 VERSION=$(OBJDIR)/version
 
 BIN=tier6
+CTL=tier6ctl
 DESTDIR?=
 PREFIX?=/usr/local
 INSTALL_DIR=$(PREFIX)/bin
@@ -20,6 +21,7 @@ LDFLAGS+=$(shell pkg-config --libs libkyrka)
 
 SRC=	src/tier6.c \
 	src/config.c \
+	src/control.c \
 	src/discovery.c \
 	src/peer.c \
 	src/remembrance.c
@@ -51,12 +53,16 @@ endif
 all:
 	$(MAKE) $(OBJDIR)
 	$(MAKE) $(BIN)
+	$(MAKE) $(CTL)
 
 OBJS=	$(SRC:%.c=$(OBJDIR)/%.o)
 OBJS+=	$(OBJDIR)/version.o
 
 $(BIN): $(OBJS) $(VERSION).c
 	$(CC) $(OBJS) $(LDFLAGS) -o $@
+
+$(CTL): src/tier6ctl.c include/tier6_ctl.h
+	$(CC) $(CFLAGS) $< -o $@
 
 $(OBJDIR):
 	@mkdir -p $(OBJDIR)

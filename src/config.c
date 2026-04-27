@@ -46,6 +46,7 @@ static void	config_parse_shroud(char *);
 static void	config_parse_kek_id(char *);
 static void	config_parse_bridge(char *);
 static void	config_parse_tapname(char *);
+static void	config_parse_control(char *);
 static void	config_parse_cs_path(char *);
 static void	config_parse_kek_path(char *);
 static void	config_parse_cosk_path(char *);
@@ -76,6 +77,7 @@ static struct {
 	{ "shroud",		config_parse_shroud },
 	{ "bridge",		config_parse_bridge },
 	{ "tapname",		config_parse_tapname },
+	{ "control",		config_parse_control },
 	{ "cathedral",		config_parse_cathedral },
 	{ "remembrance",	config_parse_remembrance },
 
@@ -282,6 +284,21 @@ config_parse_tapname(char *opt)
 		fatal("tapname already specified");
 
 	if ((t6->tapname = strdup(opt)) == NULL)
+		fatal("strdup failed");
+}
+
+/*
+ * Parse the control configuration option.
+ */
+static void
+config_parse_control(char *opt)
+{
+	PRECOND(opt != NULL);
+
+	if (t6->control != NULL)
+		fatal("control already specified");
+
+	if ((t6->control = strdup(opt)) == NULL)
 		fatal("strdup failed");
 }
 

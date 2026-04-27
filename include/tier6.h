@@ -33,6 +33,8 @@
 
 #include <libkyrka/libkyrka.h>
 
+#include "tier6_ctl.h"
+
 /* Portability for macos. */
 #if defined(__APPLE__)
 #undef daemon
@@ -176,6 +178,9 @@ struct tier6_peer {
 	struct sockaddr_in		addr;
 	struct tier6_cathedral		cathedral;
 
+	u_int64_t			rx_bytes;
+	u_int64_t			tx_bytes;
+
 	time_t				alive;
 	time_t				hb_next;
 	u_int32_t			hb_ticks;
@@ -202,6 +207,7 @@ struct tier6 {
 	char			*runas;
 	char			*bridge;
 	char			*tapname;
+	char			*control;
 	char			*remembrance;
 
 	char			*cs_path;
@@ -209,7 +215,6 @@ struct tier6 {
 	char			*cosk_path;
 
 	time_t			now;
-	u_int8_t		encap[32];
 
 	struct tier6_cathedral	cathedral;
 };
@@ -226,6 +231,9 @@ extern int		linux_seccomp_tracing;
 /* src/config.c */
 void	tier6_config(const char *);
 
+/* src/control.c */
+void	tier6_control_init(void);
+
 /* src/discovery.c */
 void	tier6_discovery_init(void);
 void	tier6_discovery_update(void);
@@ -235,6 +243,7 @@ void	tier6_peer_init(void);
 void	tier6_peer_update(void);
 void	tier6_peer_state(u_int8_t, u_int8_t);
 void	tier6_peer_output(const void *, size_t);
+void	tier6_peer_info(union tier6_ctl_response *);
 
 /* src/remembrance.c */
 void	tier6_remembrance_load(void);
