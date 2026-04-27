@@ -32,6 +32,8 @@ struct tier6_ctl_request {
 
 /*
  * A single peer for a TIER6_CTL_REQUEST_PEER_LIST response.
+ * These are sent one by one to the requester, with a last
+ * response being indicated by state being set to 0.
  */
 struct tier6_ctl_peer {
 	u_int8_t		id;
@@ -46,18 +48,6 @@ struct tier6_ctl_peer {
 		u_int32_t	ip;
 		u_int16_t	port;
 	} addr;
-
-	struct {
-		u_int32_t	ip;
-		u_int16_t	port;
-	} cathedral;
-} __attribute__((packed));
-
-/*
- * A TIER6_CTL_REQUEST_PEERS response.
- */
-struct tier6_ctl_peers {
-	struct tier6_ctl_peer	list[KYRKA_PEERS_PER_FLOCK];
 } __attribute__((packed));
 
 /*
@@ -74,7 +64,6 @@ struct tier6_ctl_info {
  * depends on what the request sent was.
  */
 union tier6_ctl_response {
-	struct tier6_ctl_peers		peers;
 	struct tier6_ctl_info		info;
 } __attribute__((packed));
 

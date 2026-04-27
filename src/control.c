@@ -134,17 +134,9 @@ control_io_event(void *udata)
 static void
 control_request_peers(struct sockaddr_un *peer)
 {
-	union tier6_ctl_response	resp;
-
 	PRECOND(peer != NULL);
 
-	memset(&resp, 0, sizeof(resp));
-
-	tier6_peer_info(&resp);
-
-	if (sendto(fd, &resp, sizeof(resp), 0,
-	    (const struct sockaddr *)peer, sizeof(*peer)) == -1)
-		tier6_log(LOG_NOTICE, "ctl sendto: %s", errno_s);
+	tier6_peer_info(fd, peer);
 }
 
 /*

@@ -16,6 +16,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -213,31 +214,40 @@ tier6_peer_output(const void *frame, size_t len)
 }
 
 /*
- * Fill in peer information so it can be sent back via the control socket.
+ * Send peer information back to the given address, finish by sending
+ * a packet with state set to 0.
  */
 void
-tier6_peer_info(union tier6_ctl_response *resp)
+tier6_peer_info(int fd, struct sockaddr_un *addr)
 {
+	struct tier6_ctl_peer	resp;
 	struct tier6_peer	*peer;
-	struct tier6_ctl_peer	*info;
 
-	PRECOND(resp != NULL);
+	PRECOND(fd >= 0);
+	PRECOND(addr != NULL);
 
 	LIST_FOREACH(peer, &peers, list) {
-		info = &resp->peers.list[peer->id];
+		resp.state = 1;
 
-		info->state = 1;
-		info->last = peer->alive;
+		resp.id = peer->id;
+		resp.last = peer->alive;
 
-		info->rx_bytes = peer->rx_bytes;
-		info->tx_bytes = peer->tx_bytes;
+		resp.rx_bytes = peer->rx_bytes;
+		resp.tx_bytes = peer->tx_bytes;
 
-		info->addr.port = peer->addr.sin_port;
-		info->addr.ip = peer->addr.sin_addr.s_addr;
+		resp.addr.port = peer->addr.sin_port;
+		resp.addr.ip = peer->addr.sin_addr.s_addr;
 
-		info->cathedral.port = peer->cathedral.addr.sin_port;
-		info->cathedral.ip = peer->cathedral.addr.sin_addr.s_addr;
+		if (sendto(fd, &resp, sizeof(resp), 0,
+		    (const struct sockaddr *)addr, sizeof(*addr)) == -1)
+			tier6_log(LOG_NOTICE, "ctl sendto: %s", errno_s);
 	}
+
+	memset(&resp, 0, sizeof(resp));
+
+	if (sendto(fd, &resp, sizeof(resp), 0,
+	    (const struct sockaddr *)addr, sizeof(*addr)) == -1)
+		tier6_log(LOG_NOTICE, "ctl sendto: %s", errno_s);
 }
 
 /*

@@ -40,8 +40,8 @@ static void	usage(void) __attribute__((noreturn));
 static void	ctl_info(int);
 static void	ctl_list_peers(int);
 
+static int	ctl_recv(int, void *, size_t);
 static void	ctl_send(int, struct tier6_ctl_request *);
-static void	ctl_recv(int, union tier6_ctl_response *);
 static void	ctl_unix_fill(struct sockaddr_un *, const char *);
 
 static const char	*ctlpath;
@@ -142,23 +142,28 @@ ctl_send(int fd, struct tier6_ctl_request *req)
 	}
 }
 
-static void
-ctl_recv(int fd, union tier6_ctl_response *resp)
+static int
+ctl_recv(int fd, void *data, size_t len)
 {
 	ssize_t		ret;
 
 	for (;;) {
-		if ((ret = recv(fd, resp, sizeof(*resp), 0)) == -1) {
+		if ((ret = recv(fd, data, len, 0)) == -1) {
 			if (errno == EINTR)
 				continue;
 			err(1, "recv");
 		}
 
-		if ((size_t)ret != sizeof(*resp))
-			errx(1, "partial recv %zd/%zu", ret, sizeof(*resp));
+		if (ret == 0)
+			return (-1);
+
+		if ((size_t)ret != len)
+			errx(1, "partial recv %zd/%zu", ret, len);
 
 		break;
 	}
+
+	return (0);
 }
 
 static void
@@ -167,38 +172,35 @@ ctl_list_peers(int fd)
 	struct timespec			ts;
 	struct in_addr			in;
 	time_t				now;
-	int				idx;
 	struct tier6_ctl_request	req;
-	union tier6_ctl_response	resp;
-	struct tier6_ctl_peer		*peer;
+	struct tier6_ctl_peer		peer;
 	float				rx, tx, last;
 
 	memset(&req, 0, sizeof(req));
 	req.type = TIER6_CTL_REQUEST_PEERS;
 
 	ctl_send(fd, &req);
-	ctl_recv(fd, &resp);
 
-	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
-	now = ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
+	for (;;) {
+		ctl_recv(fd, &peer, sizeof(peer));
 
-	for (idx = 0; idx < KYRKA_PEERS_PER_FLOCK; idx++) {
-		peer = &resp.peers.list[idx];
+		if (peer.state == 0)
+			break;
 
-		if (peer->state == 0)
-			continue;
+		(void)clock_gettime(CLOCK_MONOTONIC, &ts);
+		now = ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 
-		in.s_addr = peer->addr.ip;
-		rx = peer->rx_bytes / 1024.0f / 1024.0f;
-		tx = peer->tx_bytes / 1024.0f / 1024.0f;
+		in.s_addr = peer.addr.ip;
+		rx = peer.rx_bytes / 1024.0f / 1024.0f;
+		tx = peer.tx_bytes / 1024.0f / 1024.0f;
 
-		if (peer->last > 0)
-			last = (now - peer->last) / 1000.0f;
+		if (peer.last > 0)
+			last = (now - peer.last) / 1000.0f;
 		else
 			last = 0;
 
-		printf("%02x - %.2f %.2f MiB - %.2f sec - %s:%u\n",
-		    idx, rx, tx, last, inet_ntoa(in), ntohs(peer->addr.port));
+		printf("%02x - %.2f %.2f MiB - %.2f sec - %s:%u\n", peer.id,
+		    rx, tx, last, inet_ntoa(in), ntohs(peer.addr.port));
 	}
 }
 
@@ -212,7 +214,9 @@ ctl_info(int fd)
 	req.type = TIER6_CTL_REQUEST_INFO;
 
 	ctl_send(fd, &req);
-	ctl_recv(fd, &resp);
+
+	if (ctl_recv(fd, &resp, sizeof(resp)) == -1)
+		errx(1, "unexpected result from tier6 daemon");
 
 	printf("%02x - %" PRIx64 " - %08x\n",
 	    resp.info.kek_id, resp.info.flock, resp.info.cs_id);

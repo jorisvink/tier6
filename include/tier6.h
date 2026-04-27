@@ -22,6 +22,7 @@
 #endif
 
 #include <sys/queue.h>
+#include <sys/un.h>
 
 #include <netinet/in.h>
 
@@ -243,7 +244,7 @@ void	tier6_peer_init(void);
 void	tier6_peer_update(void);
 void	tier6_peer_state(u_int8_t, u_int8_t);
 void	tier6_peer_output(const void *, size_t);
-void	tier6_peer_info(union tier6_ctl_response *);
+void	tier6_peer_info(int, struct sockaddr_un *);
 
 /* src/remembrance.c */
 void	tier6_remembrance_load(void);
