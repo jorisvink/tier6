@@ -88,10 +88,14 @@ static struct sock_filter filter_epilogue[] = {
  */
 static struct sock_filter tier6_seccomp_filter[] = {
 	KORE_SYSCALL_ALLOW(epoll_ctl),
+#if defined(SYS_epoll_wait)
 	KORE_SYSCALL_ALLOW(epoll_wait),
+#endif
 	KORE_SYSCALL_ALLOW(epoll_pwait),
 	KORE_SYSCALL_ALLOW(epoll_pwait2),
+#if defined(SYS_epoll_create)
 	KORE_SYSCALL_ALLOW(epoll_create),
+#endif
 	KORE_SYSCALL_ALLOW(epoll_create1),
 
 	KORE_SYSCALL_ALLOW(bind),
@@ -105,13 +109,19 @@ static struct sock_filter tier6_seccomp_filter[] = {
 	KORE_SYSCALL_ALLOW_ARG(socket, 0, AF_INET),
 	KORE_SYSCALL_ALLOW_ARG(socket, 0, AF_NETLINK),
 
+#if defined(SYS_unlink)
 	KORE_SYSCALL_ALLOW(unlink),
+#endif
+#if defined(SYS_rename)
 	KORE_SYSCALL_ALLOW(rename),
+#endif
 
 	KORE_SYSCALL_ALLOW(brk),
 	KORE_SYSCALL_ALLOW(fstat),
 	KORE_SYSCALL_ALLOW(fcntl),
+#if defined(SYS_open)
 	KORE_SYSCALL_ALLOW(open),
+#endif
 	KORE_SYSCALL_ALLOW(openat),
 	KORE_SYSCALL_ALLOW(getpid),
 	KORE_SYSCALL_ALLOW(getrandom),
