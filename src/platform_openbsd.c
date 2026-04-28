@@ -237,6 +237,18 @@ tier6_platform_tap_configure(struct in_addr *addr)
 }
 
 /*
+ * Enable or disable the setting of the DF bit in the IP header.
+ */
+void
+tier6_platform_ip_fragmentation(int fd, int on)
+{
+	PRECOND(fd >= 0);
+	PRECOND(on == 0 || on == 1);
+
+	/* Not set on OpenBSD. */
+}
+
+/*
  * Create our tap device, unlike Linux we cannot name tap devices and
  * thus are left to use the standard names.
  */

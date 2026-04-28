@@ -267,6 +267,19 @@ tier6_platform_tap_configure(struct in_addr *addr)
 }
 
 /*
+ * Enable or disable the setting of the DF bit in the IP header.
+ */
+void
+tier6_platform_ip_fragmentation(int fd, int on)
+{
+	PRECOND(fd >= 0);
+	PRECOND(on == 0 || on == 1);
+
+	if (setsockopt(fd, IPPROTO_IP, IP_DONTFRAG, &on, sizeof(on)) == -1)
+		fatal("%s: setsockopt: %s", __func__, errno_s);
+}
+
+/*
  * Setup both fake ethernet interfaces, hook em up to each other
  * and configure everything in such a way that it should just work.
  */

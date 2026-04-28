@@ -276,4 +276,6 @@ ssize_t	tier6_platform_tap_write(const void *, size_t);
 void	tier6_platform_io_wait(void);
 void	tier6_platform_io_schedule(int, void *);
 
+void	tier6_platform_ip_fragmentation(int, int);
+
 #endif

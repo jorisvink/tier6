@@ -105,6 +105,7 @@ static struct sock_filter tier6_seccomp_filter[] = {
 	KORE_SYSCALL_ALLOW(sendto),
 	KORE_SYSCALL_ALLOW(recvmsg),
 	KORE_SYSCALL_ALLOW(recvfrom),
+	KORE_SYSCALL_ALLOW(setsockopt),
 	KORE_SYSCALL_ALLOW(getsockname),
 	KORE_SYSCALL_ALLOW_ARG(socket, 0, AF_INET),
 	KORE_SYSCALL_ALLOW_ARG(socket, 0, AF_NETLINK),
@@ -287,6 +288,27 @@ tier6_platform_tap_configure(struct in_addr *addr)
 		fatal("ioctl(SIOCSIFNETMASK): %s", errno_s);
 
 	(void)close(fd);
+}
+
+/*
+ * Enable or disable the setting of the DF bit in the IP header.
+ */
+void
+tier6_platform_ip_fragmentation(int fd, int on)
+{
+	int		val;
+
+	PRECOND(fd >= 0);
+	PRECOND(on == 0 || on == 1);
+
+	if (on)
+		val = IP_PMTUDISC_DO;
+	else
+		val = IP_PMTUDISC_DONT;
+
+	if (setsockopt(fd, IPPROTO_IP,
+	    IP_MTU_DISCOVER, &val, sizeof(val)) == -1)
+		fatal("%s: setsockopt: %s", __func__, errno_s);
 }
 
 /*
