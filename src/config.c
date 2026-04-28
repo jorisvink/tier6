@@ -143,7 +143,7 @@ tier6_config(const char *path)
 
 	if (t6->mtu == 0) {
 		if (t6->flags & TIER6_FLAG_SHROUD)
-			t6->mtu = 1374;
+			t6->mtu = 1360;
 		else
 			t6->mtu = 1420;
 	}
