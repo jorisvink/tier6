@@ -5,7 +5,7 @@ OBJDIR?=obj
 VERSION=$(OBJDIR)/version
 
 BIN=tier6
-CTL=tier6ctl
+CTL=t6ctl
 DESTDIR?=
 PREFIX?=/usr/local
 INSTALL_DIR=$(PREFIX)/bin
@@ -61,7 +61,7 @@ OBJS+=	$(OBJDIR)/version.o
 $(BIN): $(OBJS) $(VERSION).c
 	$(CC) $(OBJS) $(LDFLAGS) -o $@
 
-$(CTL): src/tier6ctl.c include/tier6_ctl.h
+$(CTL): src/t6ctl.c include/tier6_ctl.h
 	$(CC) $(CFLAGS) $< -o $@
 
 $(OBJDIR):
