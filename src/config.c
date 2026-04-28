@@ -20,6 +20,7 @@
 #include <arpa/inet.h>
 
 #include <ctype.h>
+#include <netdb.h>
 #include <limits.h>
 #include <inttypes.h>
 #include <pwd.h>
@@ -359,7 +360,9 @@ config_parse_cosk_path(char *opt)
 static void
 config_parse_cathedral(char *opt)
 {
-	char		*port;
+	int			ret;
+	char			*port;
+	struct addrinfo		hints, *res, *rp;
 
 	PRECOND(opt != NULL);
 
@@ -367,17 +370,28 @@ config_parse_cathedral(char *opt)
 		fatal("cathedral <ip:port>");
 
 	*(port)++ = '\0';
+	memset(&hints, 0, sizeof(hints));
 
-	if (sscanf(port, "%hu", &t6->cathedral.addr.sin_port) != 1)
-		fatal("cathedral <ip:port>, port '%s' invalid", port);
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_DGRAM;
 
-	if (inet_pton(AF_INET, opt, &t6->cathedral.addr.sin_addr.s_addr) == -1)
-		fatal("cathedral <ip:port>, ip '%s' invalid", opt);
+	if ((ret = getaddrinfo(opt, port, &hints, &res)) != 0)
+		fatal("cathedral '%s': %s", opt, gai_strerror(ret));
+
+	for (rp = res; rp != NULL; rp = rp->ai_next) {
+		if (rp->ai_family == AF_INET && rp->ai_socktype == SOCK_DGRAM)
+			break;
+	}
+
+	if (rp == NULL)
+		fatal("cathedral '%s' failed to resolve", opt);
+
+	VERIFY(rp->ai_addrlen == sizeof(t6->cathedral.addr));
+	memcpy(&t6->cathedral.addr, rp->ai_addr, rp->ai_addrlen);
+	freeaddrinfo(res);
 
 	t6->cathedral.last = 0;
 	t6->cathedral.timeout = 0;
-	t6->cathedral.addr.sin_family = AF_INET;
-	t6->cathedral.addr.sin_port = htons(t6->cathedral.addr.sin_port);
 }
 
 /*
