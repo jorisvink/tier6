@@ -290,7 +290,7 @@ peer_create(u_int8_t id)
 
 	tier6_socket_nonblock(peer->fd);
 	tier6_platform_io_schedule(peer->fd, peer);
-	tier6_platform_ip_fragmentation(peer->fd, 1);
+	tier6_platform_ip_fragmentation(peer->fd, TIER6_SET_DO_NOT_FRAGMENT);
 
 	if ((peer->ctx = kyrka_ctx_alloc(peer_kyrka_event, peer)) == NULL)
 		fatal("failed to create peer context");

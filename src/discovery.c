@@ -72,7 +72,7 @@ tier6_discovery_init(void)
 
 	tier6_socket_nonblock(fd);
 	tier6_platform_io_schedule(fd, &io);
-	tier6_platform_ip_fragmentation(fd, 1);
+	tier6_platform_ip_fragmentation(fd, TIER6_SET_DO_NOT_FRAGMENT);
 
 	if ((liturgy = kyrka_ctx_alloc(discovery_kyrka_event, NULL)) == NULL)
 		fatal("failed to create discovery context");

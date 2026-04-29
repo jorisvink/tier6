@@ -69,6 +69,10 @@ extern int daemon(int, int);
 		}							\
 	} while (0)
 
+/* Settings for IP fragmentation (setting DF bit). */
+#define TIER6_SET_ALLOW_FRAGMENT	0
+#define TIER6_SET_DO_NOT_FRAGMENT	1
+
 /* Length of an ethernet MAC address. */
 #define TIER6_ETHERNET_MAC_LEN		6
 
