@@ -1049,7 +1049,9 @@ peer_cathedral_check(struct tier6_peer *peer)
 	if ((t6->now - peer->cathedral.last) > peer->cathedral.timeout) {
 		tier6_log(LOG_NOTICE,
 		    "[peer=%02x] cathedral timed out (%u)", peer->id,
-		    peer->cathedral.timeout);
+		    peer->cathedral.timeout / 1000);
+
+		peer->cathedral.alive = 0;
 
 		if (peer->addr.sin_addr.s_addr ==
 		    peer->cathedral.addr.sin_addr.s_addr)
@@ -1080,4 +1082,10 @@ peer_cathedral_alive(struct tier6_peer *peer)
 
 	peer->cathedral.last = t6->now;
 	peer->cathedral.timeout = TIER6_CATHEDRAL_TIMEOUT;
+
+	if (peer->cathedral.alive == 0) {
+		peer->cathedral.alive = 1;
+		tier6_log(LOG_INFO, "[peer=%02x] cathedral %s is alive",
+		    peer->id, tier6_address(&peer->cathedral.addr));
+	}
 }

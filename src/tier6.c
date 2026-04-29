@@ -136,7 +136,7 @@ main(int argc, char **argv)
 		fatal("failed to allocate t6 context");
 
 	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
-	t6->now = ts.tv_sec;
+	t6->now = ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 
 	signal_trap(SIGINT);
 	signal_trap(SIGHUP);

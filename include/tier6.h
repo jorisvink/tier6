@@ -160,6 +160,7 @@ struct tier6_mac {
  * A cathedral we are talking to and the last time we heard from it.
  */
 struct tier6_cathedral {
+	int				alive;
 	time_t				last;
 	u_int32_t			timeout;
 	struct sockaddr_in		addr;

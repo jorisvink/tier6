@@ -134,9 +134,11 @@ tier6_discovery_update(void)
 
 	if (t6->remembrance != NULL) {
 		if ((t6->now - cathedral.last) > cathedral.timeout) {
+			cathedral.alive = 0;
+
 			tier6_log(LOG_NOTICE,
 			    "discovery cathedral timed out (%u)",
-			    cathedral.timeout);
+			    cathedral.timeout / 1000);
 
 			if (tier6_remembrance_cathedral(&cathedral) != -1) {
 				tier6_log(LOG_NOTICE,
@@ -218,6 +220,12 @@ discovery_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 
 	cathedral.last = t6->now;
 	cathedral.timeout = TIER6_CATHEDRAL_TIMEOUT;
+
+	if (cathedral.alive == 0) {
+		cathedral.alive = 1;
+		tier6_log(LOG_INFO, "discovery cathedral %s is alive",
+		    tier6_address(&cathedral.addr));
+	}
 
 	switch (evt->type) {
 	case KYRKA_EVENT_LITURGY_RECEIVED:
