@@ -198,7 +198,11 @@ struct tier6_peer {
 	LIST_ENTRY(tier6_peer)		list;
 };
 
+/* Are we using shroud? */
 #define TIER6_FLAG_SHROUD		(1 << 0)
+
+/* Are we OK with doing p2p? */
+#define TIER6_FLAG_ENABLE_P2P		(1 << 1)
 
 /*
  * Global tier6 data structure holding configuration etc.

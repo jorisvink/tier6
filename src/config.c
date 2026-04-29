@@ -39,6 +39,7 @@
 
 static void	config_check_file(const char *);
 
+static void	config_parse_p2p(char *);
 static void	config_parse_mtu(char *);
 static void	config_parse_runas(char *);
 static void	config_parse_flock(char *);
@@ -72,6 +73,7 @@ static struct {
 	{ "kek-id",		config_parse_kek_id },
 	{ "kek-path",		config_parse_kek_path },
 
+	{ "p2p",		config_parse_p2p },
 	{ "mtu",		config_parse_mtu },
 	{ "runas",		config_parse_runas },
 	{ "flock",		config_parse_flock },
@@ -427,14 +429,31 @@ config_parse_shroud(char *opt)
 }
 
 /*
+ * Parse the p2p configuration option.
+ */
+static void
+config_parse_p2p(char *opt)
+{
+	PRECOND(opt != NULL);
+
+	if (!strcmp(opt, "yes")) {
+		t6->flags |= TIER6_FLAG_ENABLE_P2P;
+	} else if (!strcmp(opt, "no")) {
+		t6->flags &= ~TIER6_FLAG_ENABLE_P2P;
+	} else {
+		fatal("p2p <yes|no>");
+	}
+}
+
+/*
  * Parse the mtu configuration option.
  */
 static void
 config_parse_mtu(char *opt)
 {
-	PRECOND(opt != NULL);
-
 	u_int16_t mtu;
+
+	PRECOND(opt != NULL);
 
 	if (sscanf(opt, "%hu", &mtu) != 1)
 		fatal("mtu <int> (16-bit number)");

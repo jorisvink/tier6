@@ -136,6 +136,8 @@ main(int argc, char **argv)
 		fatal("failed to allocate t6 context");
 
 	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
+
+	t6->flags = TIER6_FLAG_ENABLE_P2P;
 	t6->now = ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 
 	signal_trap(SIGINT);

@@ -135,10 +135,12 @@ tier6_peer_update(void)
 			    peer->id, kyrka_last_error(peer->ctx));
 		}
 
-		if (kyrka_cathedral_nat_detection(peer->ctx) == -1) {
-			tier6_log(LOG_NOTICE,
-			    "[peer=%02x] kyrka_cathedral_nat_detection: %d",
-			    peer->id, kyrka_last_error(peer->ctx));
+		if (t6->flags & TIER6_FLAG_ENABLE_P2P) {
+			if (kyrka_cathedral_nat_detection(peer->ctx) == -1) {
+				tier6_log(LOG_NOTICE, "[peer=%02x] "
+				    "kyrka_cathedral_nat_detection: %d",
+				    peer->id, kyrka_last_error(peer->ctx));
+			}
 		}
 
 		peer_heartbeat_send(peer);
