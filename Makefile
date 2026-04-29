@@ -8,6 +8,7 @@ BIN=tier6
 CTL=t6ctl
 DESTDIR?=
 PREFIX?=/usr/local
+MAN_DIR?=$(PREFIX)/share/man
 INSTALL_DIR=$(PREFIX)/bin
 
 CFLAGS+=-std=c99 -Wall -Werror -Wstrict-prototypes
@@ -98,9 +99,13 @@ $(VERSION).c: force
 		cp $(VERSION)_gen $(VERSION).c; \
 	fi
 
-install: $(BIN) $(CTL)
+install: $(BIN) $(CTL) install-man
 	install -m 555 $(BIN) $(DESTDIR)$(INSTALL_DIR)
 	install -m 555 $(CTL) $(DESTDIR)$(INSTALL_DIR)
+
+install-man:
+	mkdir -p $(DESTDIR)$(MAN_DIR)/man1
+	install -m 444 share/man/man1/tier6.1 $(DESTDIR)$(MAN_DIR)/man1
 
 clean:
 	rm -f $(VERSION)
