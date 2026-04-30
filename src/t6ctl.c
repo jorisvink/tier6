@@ -50,6 +50,9 @@ static void
 usage(void)
 {
 	printf("tier6ctl [-c path] [command]\n");
+	printf("flags:\n");
+	printf("    -c <path>  - The control path for the tier6 instance\n");
+	printf("\n");
 	printf("commands:\n");
 	printf("    peers      - Show info on all connected peers\n");
 	printf("    whoami     - Show local tier6 configuration\n");
@@ -62,7 +65,7 @@ main(int argc, char **argv)
 	struct sockaddr_un	sun;
 	int			ch, fd;
 
-	ctlpath = "/tmp/tier6.ctl";
+	ctlpath = NULL;
 
 	while ((ch = getopt(argc, argv, "c:")) != -1) {
 		switch (ch) {
@@ -73,6 +76,9 @@ main(int argc, char **argv)
 			usage();
 		}
 	}
+
+	if (ctlpath == NULL)
+		errx(1, "no control path (-c) was given");
 
 	argc -= optind;
 	argv += optind;
