@@ -22,6 +22,7 @@
 #endif
 
 #include <sys/queue.h>
+#include <sys/un.h>
 
 #include <netinet/in.h>
 
@@ -32,6 +33,8 @@
 #include <syslog.h>
 
 #include <libkyrka/libkyrka.h>
+
+#include "tier6_ctl.h"
 
 /* Portability for macos. */
 #if defined(__APPLE__)
@@ -66,6 +69,10 @@ extern int daemon(int, int);
 		}							\
 	} while (0)
 
+/* Settings for IP fragmentation (setting DF bit). */
+#define TIER6_SET_ALLOW_FRAGMENT	0
+#define TIER6_SET_DO_NOT_FRAGMENT	1
+
 /* Length of an ethernet MAC address. */
 #define TIER6_ETHERNET_MAC_LEN		6
 
@@ -78,6 +85,12 @@ extern int daemon(int, int);
 /* Special ethernet type for heartbeats. */
 #define TIER6_ETHER_TYPE_HEARTBEAT	0xdead
 
+/* Special ethernet type for discovery probe. */
+#define TIER6_ETHER_TYPE_DISC_PROBE	0xdeae
+
+/* Special ethernet type for discovery ack. */
+#define TIER6_ETHER_TYPE_DISC_ACK	0xdeaf
+
 /*
  * An ethernet frame header.
  */
@@ -85,6 +98,26 @@ struct tier6_ether {
 	u_int8_t	dst[TIER6_ETHERNET_MAC_LEN];
 	u_int8_t	src[TIER6_ETHERNET_MAC_LEN];
 	u_int16_t	proto;
+} __attribute__((packed));
+
+/* Maximum number of IPv4 addresses we send to our peer in a heartbeat. */
+#define TIER6_HB_IPV4_MAX	32
+
+/*
+ * A heartbeat packet.
+ */
+struct tier6_hb {
+	struct tier6_ether	eth;
+	u_int16_t		port;
+	u_int32_t		ips[TIER6_HB_IPV4_MAX];
+	u_int32_t		masks[TIER6_HB_IPV4_MAX];
+} __attribute__((packed));
+
+/*
+ * A discovery probe/ack.
+ */
+struct tier6_discovery {
+	struct tier6_ether	eth;
 } __attribute__((packed));
 
 /*
@@ -119,18 +152,19 @@ struct tier6_mac {
  * The seconds before we consider a cathedral timed out if we've
  * not heard from it yet.
  */
-#define TIER6_CATHEDRAL_TIMEOUT_INIT	10
+#define TIER6_CATHEDRAL_TIMEOUT_INIT	(10 * 1000)
 
 /*
  * The seconds before we consider a cathedral timed out if we've
  * managed to talk to it before.
  */
-#define TIER6_CATHEDRAL_TIMEOUT		45
+#define TIER6_CATHEDRAL_TIMEOUT		(45 * 1000)
 
 /*
  * A cathedral we are talking to and the last time we heard from it.
  */
 struct tier6_cathedral {
+	int				alive;
 	time_t				last;
 	u_int32_t			timeout;
 	struct sockaddr_in		addr;
@@ -144,9 +178,14 @@ struct tier6_peer {
 
 	int				fd;
 	u_int8_t			id;
+	u_int16_t			port;
+	int				local_discovery;
 
 	struct sockaddr_in		addr;
 	struct tier6_cathedral		cathedral;
+
+	u_int64_t			rx_bytes;
+	u_int64_t			tx_bytes;
 
 	time_t				alive;
 	time_t				hb_next;
@@ -159,7 +198,11 @@ struct tier6_peer {
 	LIST_ENTRY(tier6_peer)		list;
 };
 
+/* Are we using shroud? */
 #define TIER6_FLAG_SHROUD		(1 << 0)
+
+/* Are we OK with doing p2p? */
+#define TIER6_FLAG_ENABLE_P2P		(1 << 1)
 
 /*
  * Global tier6 data structure holding configuration etc.
@@ -172,7 +215,9 @@ struct tier6 {
 	u_int16_t		mtu;
 
 	char			*runas;
+	char			*bridge;
 	char			*tapname;
+	char			*control;
 	char			*remembrance;
 
 	char			*cs_path;
@@ -180,7 +225,6 @@ struct tier6 {
 	char			*cosk_path;
 
 	time_t			now;
-	u_int8_t		encap[32];
 
 	struct tier6_cathedral	cathedral;
 };
@@ -197,6 +241,9 @@ extern int		linux_seccomp_tracing;
 /* src/config.c */
 void	tier6_config(const char *);
 
+/* src/control.c */
+void	tier6_control_init(void);
+
 /* src/discovery.c */
 void	tier6_discovery_init(void);
 void	tier6_discovery_update(void);
@@ -206,6 +253,7 @@ void	tier6_peer_init(void);
 void	tier6_peer_update(void);
 void	tier6_peer_state(u_int8_t, u_int8_t);
 void	tier6_peer_output(const void *, size_t);
+void	tier6_peer_info(int, struct sockaddr_un *);
 
 /* src/remembrance.c */
 void	tier6_remembrance_load(void);
@@ -236,5 +284,7 @@ ssize_t	tier6_platform_tap_write(const void *, size_t);
 
 void	tier6_platform_io_wait(void);
 void	tier6_platform_io_schedule(int, void *);
+
+void	tier6_platform_ip_fragmentation(int, int);
 
 #endif

@@ -136,7 +136,9 @@ main(int argc, char **argv)
 		fatal("failed to allocate t6 context");
 
 	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
-	t6->now = ts.tv_sec;
+
+	t6->flags = TIER6_FLAG_ENABLE_P2P;
+	t6->now = ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 
 	signal_trap(SIGINT);
 	signal_trap(SIGHUP);
@@ -148,6 +150,7 @@ main(int argc, char **argv)
 	tier6_platform_init();
 
 	tier6_peer_init();
+	tier6_control_init();
 	tier6_discovery_init();
 
 	if (foreground == 0 || use_syslog == 1)
@@ -192,7 +195,7 @@ main(int argc, char **argv)
 		tier6_platform_io_wait();
 
 		(void)clock_gettime(CLOCK_MONOTONIC, &ts);
-		t6->now = ts.tv_sec;
+		t6->now = ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 
 		tier6_peer_update();
 		tier6_discovery_update();

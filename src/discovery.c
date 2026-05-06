@@ -72,6 +72,7 @@ tier6_discovery_init(void)
 
 	tier6_socket_nonblock(fd);
 	tier6_platform_io_schedule(fd, &io);
+	tier6_platform_ip_fragmentation(fd, TIER6_SET_DO_NOT_FRAGMENT);
 
 	if ((liturgy = kyrka_ctx_alloc(discovery_kyrka_event, NULL)) == NULL)
 		fatal("failed to create discovery context");
@@ -129,13 +130,15 @@ tier6_discovery_update(void)
 	if (next_notify > 0 && t6->now < next_notify)
 		return;
 
-	next_notify = t6->now + 1;
+	next_notify = t6->now + 1000;
 
 	if (t6->remembrance != NULL) {
 		if ((t6->now - cathedral.last) > cathedral.timeout) {
+			cathedral.alive = 0;
+
 			tier6_log(LOG_NOTICE,
 			    "discovery cathedral timed out (%u)",
-			    cathedral.timeout);
+			    cathedral.timeout / 1000);
 
 			if (tier6_remembrance_cathedral(&cathedral) != -1) {
 				tier6_log(LOG_NOTICE,
@@ -217,6 +220,12 @@ discovery_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 
 	cathedral.last = t6->now;
 	cathedral.timeout = TIER6_CATHEDRAL_TIMEOUT;
+
+	if (cathedral.alive == 0) {
+		cathedral.alive = 1;
+		tier6_log(LOG_INFO, "discovery cathedral %s is alive",
+		    tier6_address(&cathedral.addr));
+	}
 
 	switch (evt->type) {
 	case KYRKA_EVENT_LITURGY_RECEIVED:

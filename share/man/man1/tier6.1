@@ -1,0 +1,145 @@
+.nh
+.ad 1
+.TH TIER6 1
+.SH NAME
+tier6 \- Build a global ethernet network using sanctum p2p e2ee tunnels.
+.SH SYNOPSIS
+.B tier6
+[\-a] [\-d] [\-s] [\-v] [configuration]
+.SH DESCRIPTION
+.I Tier6
+uses the sanctum protocol and its cathedrals to autodiscover peers in the
+same flock and establish p2p e2ee tunnels to each peer in full mesh mode.
+All incoming traffic is dumped into a single tap interface. Return traffic
+is only sent to peers on which the destination MAC address has been seen as
+a source earlier, acting like a soft-switch.
+.SH OPTIONS
+.TP
+.BR \-a
+Do auto-configuration of the tap device by generating a unique IPv4 address
+for your device.
+.TP
+.BR \-d
+Run
+.I tier6
+as a daemon. This option allows the program to run in the background,
+detaching from the terminal.
+.TP
+.BR \-s
+Send all logs to syslog, even in foreground mode.
+.TP
+.BR \-h
+Prints the help synopsis.
+.TP
+.BR \-v
+Display version information. Show the version of the program and exit.
+
+.SH CONFIG
+.I Tier6
+its configuration file is simple. If no configuration file was given
+on the command-line,
+.I tier6
+will look for
+.I /etc/tier6.conf
+by default.
+
+.TP
+The following configuration options are allowed to be set in a config file:
+
+.TP
+.BR runas " " <user>
+The user tier6 will run as after starting.
+.TP
+.BR kek-id " " <hex>
+The key encryption id for this device.
+.TP
+.BR cs-id " " <hex>
+The cathedral secret id for this device.
+.TP
+.BR flock " " <hex>
+The cathedral flock id this device belongs too.
+.TP
+.BR tapname " " <name>
+The name the tap device will get on Linux. Note that on OpenBSD and MacOS this
+is not able to be specified and will be ignored.
+.TP
+.BR cathedral " " <host:port>
+The initial cathedral we will connect too. Host may be a FQDN or IPv4 address.
+.TP
+.BR kek-path " " <path>
+The path to the Key-Encryption-Key, this file
+.B must
+be readble by the
+.B runas
+user.
+If not set, tier6 will attempt to use the Key-Encryption-Key under
+.B $HOME/.config/reliquary/<flock>.
+.TP
+.BR cs-path " " <path>
+The path to the cathedral secret key, this file
+.B must
+be readble by the
+.B runas
+user.
+If not set, tier6 will attempt to use the secret under
+.B $HOME/.config/reliquary/<flock>.
+.TP
+.BR cosk-path " " /path/to/cosk
+The path to the cathedral offer signing private key, this file
+.B must
+be readble by the
+.B runas
+user.
+If not set, tier6 will attempt to use the COSK under
+.B $HOME/.config/reliquary/<flock>.
+.TP
+.BR remembrance " " /path/to/remembrance
+Set the path where remembrances are saved. These are used to select
+new cathedrals in the case the current one stops responding. These
+are sent from the initial cathedral.
+.TP
+.BR shroud " " <yes|no>
+If set to yes, all protocol meta-data is masked away making it look
+like random data. This makes traffic analysis much harder.
+.TP
+.BR bridge " " <name>
+If set will instruct
+.I tier6
+to create or join the given bridge with our tap interface. Note that
+on OpenBSD this name
+.B must
+follow the correct idiom, eg:
+.B "bridge0"
+and that on MacOS this is not supported.
+
+.SH EXAMPLE
+
+Below is a simple example configuration file.
+
+.RS 4
+.nf
+runas joris
+
+kek-id 02
+cs-id baa0fb2f
+flock fc1a13b96e76ec66
+
+tapname sancnet
+cathedral cathedral.reliquary.se:4469
+.fi
+.RE
+
+In the example configuration we let
+.I tier6
+use the default reliquary paths under
+.B $HOME/.config/reliquary
+to find the correct files.
+
+.SH AUTHORS
+
+.I Tier6
+was designed and written by Joris Vink <joris@sanctorum.se> and
+is licensed under the ISC license.
+
+.SH "SEE ALSO"
+.BR sanctum(1)

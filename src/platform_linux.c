@@ -26,6 +26,7 @@
 
 #include <linux/if_tun.h>
 #include <linux/seccomp.h>
+#include <linux/sockios.h>
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -57,6 +58,7 @@
 static void		linux_tap_io(void *);
 static void		linux_tap_create(void);
 static void		linux_sandbox_seccomp(void);
+static void		linux_bridge_configure(void);
 
 /*
  * The seccomp bpf program its prologue.
@@ -86,26 +88,41 @@ static struct sock_filter filter_epilogue[] = {
  */
 static struct sock_filter tier6_seccomp_filter[] = {
 	KORE_SYSCALL_ALLOW(epoll_ctl),
+#if defined(SYS_epoll_wait)
 	KORE_SYSCALL_ALLOW(epoll_wait),
+#endif
 	KORE_SYSCALL_ALLOW(epoll_pwait),
 	KORE_SYSCALL_ALLOW(epoll_pwait2),
+#if defined(SYS_epoll_create)
 	KORE_SYSCALL_ALLOW(epoll_create),
+#endif
 	KORE_SYSCALL_ALLOW(epoll_create1),
 
+	KORE_SYSCALL_ALLOW(bind),
 	KORE_SYSCALL_ALLOW(read),
 	KORE_SYSCALL_ALLOW(write),
 	KORE_SYSCALL_ALLOW(close),
 	KORE_SYSCALL_ALLOW(sendto),
+	KORE_SYSCALL_ALLOW(recvmsg),
 	KORE_SYSCALL_ALLOW(recvfrom),
+	KORE_SYSCALL_ALLOW(setsockopt),
+	KORE_SYSCALL_ALLOW(getsockname),
 	KORE_SYSCALL_ALLOW_ARG(socket, 0, AF_INET),
+	KORE_SYSCALL_ALLOW_ARG(socket, 0, AF_NETLINK),
 
+#if defined(SYS_unlink)
 	KORE_SYSCALL_ALLOW(unlink),
+#endif
+#if defined(SYS_rename)
 	KORE_SYSCALL_ALLOW(rename),
+#endif
 
 	KORE_SYSCALL_ALLOW(brk),
 	KORE_SYSCALL_ALLOW(fstat),
 	KORE_SYSCALL_ALLOW(fcntl),
+#if defined(SYS_open)
 	KORE_SYSCALL_ALLOW(open),
+#endif
 	KORE_SYSCALL_ALLOW(openat),
 	KORE_SYSCALL_ALLOW(getpid),
 	KORE_SYSCALL_ALLOW(getrandom),
@@ -143,6 +160,10 @@ tier6_platform_init(void)
 		fatal("epoll_create: %s", errno_s);
 
 	linux_tap_create();
+
+	if (t6->bridge != NULL)
+		linux_bridge_configure();
+
 	tap_io.handle = linux_tap_io;
 
 	tier6_socket_nonblock(tap_fd);
@@ -270,6 +291,27 @@ tier6_platform_tap_configure(struct in_addr *addr)
 }
 
 /*
+ * Enable or disable the setting of the DF bit in the IP header.
+ */
+void
+tier6_platform_ip_fragmentation(int fd, int on)
+{
+	int		val;
+
+	PRECOND(fd >= 0);
+	PRECOND(on == 0 || on == 1);
+
+	if (on)
+		val = IP_PMTUDISC_DO;
+	else
+		val = IP_PMTUDISC_DONT;
+
+	if (setsockopt(fd, IPPROTO_IP,
+	    IP_MTU_DISCOVER, &val, sizeof(val)) == -1)
+		fatal("%s: setsockopt: %s", __func__, errno_s);
+}
+
+/*
  * Create our name tap interface based on the tapname configuration.
  */
 static void
@@ -326,6 +368,44 @@ linux_tap_create(void)
 	(void)close(fd);
 
 	tier6_log(LOG_INFO, "interface '%s' created", t6->tapname);
+}
+
+/*
+ * Create and (or) join the configured bridge interface.
+ */
+static void
+linux_bridge_configure(void)
+{
+	struct ifreq		ifr;
+	int			fd, len;
+
+	PRECOND(t6->bridge != NULL);
+
+	memset(&ifr, 0, sizeof(ifr));
+
+	len = snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", t6->bridge);
+	if (len == -1 || (size_t)len >= sizeof(ifr.ifr_name))
+		fatal("bridge name '%s' too long", t6->bridge);
+
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		fatal("socket: %s", errno_s);
+
+	if (ioctl(fd, SIOCBRADDBR, ifr.ifr_name) == -1) {
+		if (errno != EEXIST)
+			fatal("ioctl(SIOCBRADDBR): %s", errno_s);
+	}
+
+	ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
+	if (ioctl(fd, SIOCSIFFLAGS, &ifr) == -1)
+		fatal("ioctl(SIOCSIFFLAGS): %s", errno_s);
+
+	ifr.ifr_ifindex = if_nametoindex(t6->tapname);
+	if (ioctl(fd, SIOCBRADDIF, &ifr) == -1)
+		fatal("ioctl(SIOCBRADDIF): %s", errno_s);
+
+	(void)close(fd);
+
+	tier6_log(LOG_INFO, "added '%s' to '%s'", t6->tapname, t6->bridge);
 }
 
 /*

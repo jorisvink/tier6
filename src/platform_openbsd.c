@@ -18,12 +18,14 @@
 #include <sys/event.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/sockio.h>
 #include <sys/time.h>
 
 #include <arpa/inet.h>
 
 #include <net/if.h>
 #include <netinet/if_ether.h>
+#include <net/if_bridge.h>
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -38,6 +40,7 @@
 
 static void		openbsd_tap_io(void *);
 static void		openbsd_tap_create(void);
+static void		openbsd_bridge_configure(void);
 
 /* The kqueue() fd. */
 static int		kfd = -1;
@@ -64,6 +67,14 @@ tier6_platform_init(void)
 		fatal("kqueue: %s", errno_s);
 
 	openbsd_tap_create();
+	free(t6->tapname);
+
+	if ((t6->tapname = strdup(device)) == NULL)
+		fatal("strdup failed");
+
+	if (t6->bridge != NULL)
+		openbsd_bridge_configure();
+
 	tap_io.handle = openbsd_tap_io;
 
 	tier6_socket_nonblock(tap_fd);
@@ -90,6 +101,11 @@ tier6_platform_sandbox(void)
 	if (unveil(t6->cosk_path, "r") == -1)
 		fatal("unveil(%s): %s", t6->cosk_path, errno_s);
 
+	if (t6->control != NULL) {
+		if (unveil("/tmp/tier6ctl.client", "rw") == -1)
+			fatal("unveil(%s): %s", t6->remembrance, errno_s);
+	}
+
 	if (t6->remembrance != NULL) {
 		len = snprintf(tmp, sizeof(tmp), "%s.tmp", t6->remembrance);
 		if (len == -1 || (size_t)len >= sizeof(tmp))
@@ -101,10 +117,10 @@ tier6_platform_sandbox(void)
 		if (unveil(t6->remembrance, "crw") == -1)
 			fatal("unveil(%s): %s", t6->remembrance, errno_s);
 
-		if (pledge("stdio cpath wpath rpath inet", NULL) == -1)
+		if (pledge("stdio cpath wpath rpath inet unix", NULL) == -1)
 			fatal("pledge: %s", errno_s);
 	} else {
-		if (pledge("stdio rpath inet", NULL) == -1)
+		if (pledge("stdio rpath inet unix", NULL) == -1)
 			fatal("pledge: %s", errno_s);
 	}
 }
@@ -221,6 +237,18 @@ tier6_platform_tap_configure(struct in_addr *addr)
 }
 
 /*
+ * Enable or disable the setting of the DF bit in the IP header.
+ */
+void
+tier6_platform_ip_fragmentation(int fd, int on)
+{
+	PRECOND(fd >= 0);
+	PRECOND(on == 0 || on == 1);
+
+	/* Not set on OpenBSD. */
+}
+
+/*
  * Create our tap device, unlike Linux we cannot name tap devices and
  * thus are left to use the standard names.
  */
@@ -289,6 +317,52 @@ openbsd_tap_create(void)
 	}
 
 	(void)close(fd);
+}
+
+/*
+ * Create and (or) join the configured bridge interface.
+ */
+static void
+openbsd_bridge_configure(void)
+{
+	int		fd;
+	struct ifreq	ifr;
+	struct ifbreq	ifbr;
+
+	PRECOND(t6->bridge != NULL);
+
+	memset(&ifbr, 0, sizeof(ifbr));
+
+	if (strlcpy(ifr.ifr_name, t6->bridge,
+	    sizeof(ifr.ifr_name)) >= sizeof(ifr.ifr_name))
+		fatal("bridge name '%s' to long", t6->bridge);
+
+	if (strlcpy(ifbr.ifbr_name, t6->bridge,
+	    sizeof(ifbr.ifbr_name)) >= sizeof(ifbr.ifbr_name))
+		fatal("bridge name '%s' to long", t6->bridge);
+
+	if (strlcpy(ifbr.ifbr_ifsname, device,
+	    sizeof(ifbr.ifbr_ifsname)) >= sizeof(ifbr.ifbr_ifsname))
+		fatal("bridge name '%s' to long", t6->bridge);
+
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		fatal("socket: %s", errno_s);
+
+	if (ioctl(fd, SIOCIFCREATE, &ifr) == -1 && errno != EEXIST)
+		fatal("ioctl(SIOCIFCREATE): %s", errno_s);
+
+	if (ioctl(fd, SIOCBRDGADD, &ifbr) == -1) {
+		if (errno != EEXIST)
+			fatal("ioctl(SIOCBRDGADD): %s", errno_s);
+	}
+
+	ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
+	if (ioctl(fd, SIOCSIFFLAGS, &ifr) == -1)
+		fatal("ioctl(SIOCSIFFLAGS): %s", errno_s);
+
+	(void)close(fd);
+
+	tier6_log(LOG_INFO, "added '%s' to '%s'", device, t6->bridge);
 }
 
 /*

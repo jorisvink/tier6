@@ -130,8 +130,16 @@ tier6_platform_init(void)
 	PRECOND(bpf_fd == -1);
 	PRECOND(ndrv_fd == -1);
 
+	if (t6->bridge != NULL)
+		fatal("bridge config is not supported on MacOS");
+
 	if ((kfd = kqueue()) == -1)
 		fatal("kqueue: %s", errno_s);
+
+	free(t6->tapname);
+
+	if ((t6->tapname = strdup(FETH_PRIMARY_IFC)) == NULL)
+		fatal("strdup failed");
 
 	darwin_feth_setup();
 
@@ -256,6 +264,19 @@ tier6_platform_tap_configure(struct in_addr *addr)
 		fatal("ioctl(SIOCAIFADDR): %s", errno_s);
 
 	(void)close(fd);
+}
+
+/*
+ * Enable or disable the setting of the DF bit in the IP header.
+ */
+void
+tier6_platform_ip_fragmentation(int fd, int on)
+{
+	PRECOND(fd >= 0);
+	PRECOND(on == 0 || on == 1);
+
+	if (setsockopt(fd, IPPROTO_IP, IP_DONTFRAG, &on, sizeof(on)) == -1)
+		fatal("%s: setsockopt: %s", __func__, errno_s);
 }
 
 /*

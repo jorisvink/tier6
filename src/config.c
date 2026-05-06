@@ -20,6 +20,7 @@
 #include <arpa/inet.h>
 
 #include <ctype.h>
+#include <netdb.h>
 #include <limits.h>
 #include <inttypes.h>
 #include <pwd.h>
@@ -38,13 +39,16 @@
 
 static void	config_check_file(const char *);
 
+static void	config_parse_p2p(char *);
 static void	config_parse_mtu(char *);
 static void	config_parse_runas(char *);
 static void	config_parse_flock(char *);
 static void	config_parse_cs_id(char *);
 static void	config_parse_shroud(char *);
 static void	config_parse_kek_id(char *);
+static void	config_parse_bridge(char *);
 static void	config_parse_tapname(char *);
+static void	config_parse_control(char *);
 static void	config_parse_cs_path(char *);
 static void	config_parse_kek_path(char *);
 static void	config_parse_cosk_path(char *);
@@ -69,11 +73,14 @@ static struct {
 	{ "kek-id",		config_parse_kek_id },
 	{ "kek-path",		config_parse_kek_path },
 
+	{ "p2p",		config_parse_p2p },
 	{ "mtu",		config_parse_mtu },
 	{ "runas",		config_parse_runas },
 	{ "flock",		config_parse_flock },
 	{ "shroud",		config_parse_shroud },
+	{ "bridge",		config_parse_bridge },
 	{ "tapname",		config_parse_tapname },
+	{ "control",		config_parse_control },
 	{ "cathedral",		config_parse_cathedral },
 	{ "remembrance",	config_parse_remembrance },
 
@@ -139,7 +146,7 @@ tier6_config(const char *path)
 
 	if (t6->mtu == 0) {
 		if (t6->flags & TIER6_FLAG_SHROUD)
-			t6->mtu = 1374;
+			t6->mtu = 1360;
 		else
 			t6->mtu = 1420;
 	}
@@ -150,8 +157,10 @@ tier6_config(const char *path)
 	if (t6->runas == NULL)
 		fatal("no runas was specified in the configuration");
 
+#if !defined(__APPLE__)
 	if (t6->tapname == NULL)
 		fatal("no tapname was specified in the configuration");
+#endif
 
 	if (t6->cs_path == NULL || t6->kek_path == NULL ||
 	    t6->cosk_path == NULL)
@@ -252,6 +261,21 @@ config_parse_flock(char *opt)
 }
 
 /*
+ * Parse the bridge configuration option.
+ */
+static void
+config_parse_bridge(char *opt)
+{
+	PRECOND(opt != NULL);
+
+	if (t6->bridge != NULL)
+		fatal("bridge already specified");
+
+	if ((t6->bridge = strdup(opt)) == NULL)
+		fatal("strdup failed");
+}
+
+/*
  * Parse the tapname configuration option.
  */
 static void
@@ -263,6 +287,21 @@ config_parse_tapname(char *opt)
 		fatal("tapname already specified");
 
 	if ((t6->tapname = strdup(opt)) == NULL)
+		fatal("strdup failed");
+}
+
+/*
+ * Parse the control configuration option.
+ */
+static void
+config_parse_control(char *opt)
+{
+	PRECOND(opt != NULL);
+
+	if (t6->control != NULL)
+		fatal("control already specified");
+
+	if ((t6->control = strdup(opt)) == NULL)
 		fatal("strdup failed");
 }
 
@@ -323,7 +362,9 @@ config_parse_cosk_path(char *opt)
 static void
 config_parse_cathedral(char *opt)
 {
-	char		*port;
+	int			ret;
+	char			*port;
+	struct addrinfo		hints, *res, *rp;
 
 	PRECOND(opt != NULL);
 
@@ -331,17 +372,28 @@ config_parse_cathedral(char *opt)
 		fatal("cathedral <ip:port>");
 
 	*(port)++ = '\0';
+	memset(&hints, 0, sizeof(hints));
 
-	if (sscanf(port, "%hu", &t6->cathedral.addr.sin_port) != 1)
-		fatal("cathedral <ip:port>, port '%s' invalid", port);
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_DGRAM;
 
-	if (inet_pton(AF_INET, opt, &t6->cathedral.addr.sin_addr.s_addr) == -1)
-		fatal("cathedral <ip:port>, ip '%s' invalid", opt);
+	if ((ret = getaddrinfo(opt, port, &hints, &res)) != 0)
+		fatal("cathedral '%s': %s", opt, gai_strerror(ret));
+
+	for (rp = res; rp != NULL; rp = rp->ai_next) {
+		if (rp->ai_family == AF_INET && rp->ai_socktype == SOCK_DGRAM)
+			break;
+	}
+
+	if (rp == NULL)
+		fatal("cathedral '%s' failed to resolve", opt);
+
+	VERIFY(rp->ai_addrlen == sizeof(t6->cathedral.addr));
+	memcpy(&t6->cathedral.addr, rp->ai_addr, rp->ai_addrlen);
+	freeaddrinfo(res);
 
 	t6->cathedral.last = 0;
 	t6->cathedral.timeout = 0;
-	t6->cathedral.addr.sin_family = AF_INET;
-	t6->cathedral.addr.sin_port = htons(t6->cathedral.addr.sin_port);
 }
 
 /*
@@ -377,14 +429,31 @@ config_parse_shroud(char *opt)
 }
 
 /*
+ * Parse the p2p configuration option.
+ */
+static void
+config_parse_p2p(char *opt)
+{
+	PRECOND(opt != NULL);
+
+	if (!strcmp(opt, "yes")) {
+		t6->flags |= TIER6_FLAG_ENABLE_P2P;
+	} else if (!strcmp(opt, "no")) {
+		t6->flags &= ~TIER6_FLAG_ENABLE_P2P;
+	} else {
+		fatal("p2p <yes|no>");
+	}
+}
+
+/*
  * Parse the mtu configuration option.
  */
 static void
 config_parse_mtu(char *opt)
 {
-	PRECOND(opt != NULL);
-
 	u_int16_t mtu;
+
+	PRECOND(opt != NULL);
 
 	if (sscanf(opt, "%hu", &mtu) != 1)
 		fatal("mtu <int> (16-bit number)");

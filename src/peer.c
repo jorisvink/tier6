@@ -16,10 +16,14 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
+#include <net/if.h>
+
+#include <ifaddrs.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -27,10 +31,10 @@
 #include "tier6.h"
 
 /* The maximum age in seconds a MAC is valid. */
-#define PEER_MAC_AGE_MAX	(60 * 20)
+#define PEER_MAC_AGE_MAX	((60 * 20) * 1000)
 
 /* The age in seconds before we consider a peer timed out. */
-#define PEER_ALIVE_TIMEOUT	45
+#define PEER_ALIVE_TIMEOUT	(45 * 1000)
 
 static void	peer_create(u_int8_t);
 static void	peer_delete(struct tier6_peer *);
@@ -38,7 +42,12 @@ static void	peer_delete(struct tier6_peer *);
 static void	peer_io_event(void *);
 static void	peer_io_read(struct tier6_peer *);
 
-static void	peer_heartbeat(struct tier6_peer *);
+static void	peer_heartbeat_send(struct tier6_peer *);
+static void	peer_heartbeat_recv(struct tier6_peer *, struct kyrka_packet *);
+
+static void	peer_discovery_ack(struct tier6_peer *);
+static void	peer_discovery_probe(struct tier6_peer *, u_int32_t, u_int16_t);
+
 static void	peer_mac_prune(struct tier6_peer *);
 static void	peer_cathedral_alive(struct tier6_peer *);
 static void	peer_cathedral_check(struct tier6_peer *);
@@ -55,7 +64,10 @@ static void	peer_purgatory_input(struct kyrka_packet *, u_int64_t, void *);
 /* Our list of active peers. */
 static LIST_HEAD(, tier6_peer)		peers;
 
-/* The next time we should update peers. */
+/* The sender of our current received packet. */
+static struct sockaddr_in		sender;
+
+/* The next time we should update all peers. */
 static time_t				next_update;
 
 /*
@@ -105,7 +117,7 @@ tier6_peer_update(void)
 	if (next_update > 0 && t6->now < next_update)
 		return;
 
-	next_update = t6->now + 1;
+	next_update = t6->now + 1000;
 
 	LIST_FOREACH(peer, &peers, list) {
 		if (t6->remembrance != NULL)
@@ -123,13 +135,15 @@ tier6_peer_update(void)
 			    peer->id, kyrka_last_error(peer->ctx));
 		}
 
-		if (kyrka_cathedral_nat_detection(peer->ctx) == -1) {
-			tier6_log(LOG_NOTICE,
-			    "[peer=%02x] kyrka_cathedral_nat_detection: %d",
-			    peer->id, kyrka_last_error(peer->ctx));
+		if (t6->flags & TIER6_FLAG_ENABLE_P2P) {
+			if (kyrka_cathedral_nat_detection(peer->ctx) == -1) {
+				tier6_log(LOG_NOTICE, "[peer=%02x] "
+				    "kyrka_cathedral_nat_detection: %d",
+				    peer->id, kyrka_last_error(peer->ctx));
+			}
 		}
 
-		peer_heartbeat(peer);
+		peer_heartbeat_send(peer);
 		peer_mac_prune(peer);
 	}
 }
@@ -202,6 +216,43 @@ tier6_peer_output(const void *frame, size_t len)
 }
 
 /*
+ * Send peer information back to the given address, finish by sending
+ * a packet with state set to 0.
+ */
+void
+tier6_peer_info(int fd, struct sockaddr_un *addr)
+{
+	struct tier6_ctl_peer	resp;
+	struct tier6_peer	*peer;
+
+	PRECOND(fd >= 0);
+	PRECOND(addr != NULL);
+
+	LIST_FOREACH(peer, &peers, list) {
+		resp.state = 1;
+
+		resp.id = peer->id;
+		resp.last = peer->alive;
+
+		resp.rx_bytes = peer->rx_bytes;
+		resp.tx_bytes = peer->tx_bytes;
+
+		resp.addr.port = peer->addr.sin_port;
+		resp.addr.ip = peer->addr.sin_addr.s_addr;
+
+		if (sendto(fd, &resp, sizeof(resp), 0,
+		    (const struct sockaddr *)addr, sizeof(*addr)) == -1)
+			tier6_log(LOG_NOTICE, "ctl sendto: %s", errno_s);
+	}
+
+	memset(&resp, 0, sizeof(resp));
+
+	if (sendto(fd, &resp, sizeof(resp), 0,
+	    (const struct sockaddr *)addr, sizeof(*addr)) == -1)
+		tier6_log(LOG_NOTICE, "ctl sendto: %s", errno_s);
+}
+
+/*
  * Create a new tunnel for the given peer and schedule it onto
  * our internal event loop.
  */
@@ -209,7 +260,9 @@ static void
 peer_create(u_int8_t id)
 {
 	struct kyrka_cathedral_cfg	cfg;
+	struct sockaddr_in		sin;
 	struct tier6_peer		*peer;
+	socklen_t			socklen;
 
 	PRECOND(id >= 1);
 
@@ -219,14 +272,27 @@ peer_create(u_int8_t id)
 	LIST_INIT(&peer->macs);
 
 	peer->id = id;
-	peer->hb_frequency = 5;
+	peer->hb_frequency = 5000;
 	peer->io.handle = peer_io_event;
 
 	if ((peer->fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		fatal("socket: %s", errno_s);
 
+	memset(&sin, 0, sizeof(sin));
+	sin.sin_family = AF_INET;
+
+	if (bind(peer->fd, (const struct sockaddr *)&sin, sizeof(sin)) == -1)
+		fatal("bind: %s", errno_s);
+
+	socklen = sizeof(sin);
+	if (getsockname(peer->fd, (struct sockaddr *)&sin, &socklen) == -1)
+		fatal("getsockname: %s", errno_s);
+
+	peer->port = sin.sin_port;
+
 	tier6_socket_nonblock(peer->fd);
 	tier6_platform_io_schedule(peer->fd, peer);
+	tier6_platform_ip_fragmentation(peer->fd, TIER6_SET_DO_NOT_FRAGMENT);
 
 	if ((peer->ctx = kyrka_ctx_alloc(peer_kyrka_event, peer)) == NULL)
 		fatal("failed to create peer context");
@@ -281,8 +347,8 @@ peer_create(u_int8_t id)
 
 	LIST_INSERT_HEAD(&peers, peer, list);
 
-	tier6_log(LOG_INFO, "[peer=%02x] tunnel created (%s)", id,
-	    tier6_address(&peer->cathedral.addr));
+	tier6_log(LOG_INFO, "[peer=%02x] tunnel created (%s) (port=%u)", id,
+	    tier6_address(&peer->cathedral.addr), ntohs(peer->port));
 }
 
 /*
@@ -343,7 +409,6 @@ peer_io_read(struct tier6_peer *peer)
 {
 	size_t			len;
 	ssize_t			ret;
-	struct sockaddr_in	sin;
 	struct kyrka_packet	pkt;
 	u_int8_t		*ptr;
 	socklen_t		socklen;
@@ -354,10 +419,10 @@ peer_io_read(struct tier6_peer *peer)
 		if ((ptr = kyrka_packet_recvbuf(peer->ctx, &pkt, &len)) == NULL)
 			fatal("failed to get peer receive buffer");
 
-		socklen = sizeof(sin);
+		socklen = sizeof(sender);
 
 		if ((ret = recvfrom(peer->fd, ptr, len, MSG_DONTWAIT,
-		    (struct sockaddr *)&sin, &socklen)) == -1) {
+		    (struct sockaddr *)&sender, &socklen)) == -1) {
 			if (errno == EINTR)
 				continue;
 			if (errno == EWOULDBLOCK || errno == EAGAIN) {
@@ -371,8 +436,9 @@ peer_io_read(struct tier6_peer *peer)
 			continue;
 
 		pkt.length = ret;
+		peer->rx_bytes += ret;
 
-		if (tier6_inet_match(&sin, &peer->cathedral.addr))
+		if (tier6_inet_match(&sender, &peer->cathedral.addr))
 			pkt.shroud = KYRKA_PACKET_SHROUD_CATHEDRAL;
 		else
 			pkt.shroud = KYRKA_PACKET_SHROUD_PEER;
@@ -422,6 +488,17 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 		in.s_addr = evt->peer.ip;
 		peer_cathedral_alive(peer);
 
+		if (evt->peer.flags & KYRKA_INFO_FLAG_SAME_EXTERNAL_IPV4) {
+			peer->local_discovery = 1;
+			break;
+		}
+
+		if (peer->local_discovery) {
+			if (kyrka_p2p_active(peer->ctx, 0) == -1)
+				fatal("failed to set p2p status");
+			peer->local_discovery = 0;
+		}
+
 		if (peer->addr.sin_addr.s_addr != evt->peer.ip ||
 		    peer->addr.sin_port != evt->peer.port) {
 			peer->addr.sin_port = evt->peer.port;
@@ -440,7 +517,7 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 				    htons(evt->peer.port));
 
 				peer->hb_ticks = 15;
-				peer->hb_frequency = 1;
+				peer->hb_frequency = 1000;
 			} else {
 				if (kyrka_p2p_active(peer->ctx, 0) == -1)
 					fatal("failed to set p2p status");
@@ -487,7 +564,20 @@ peer_heaven_input(struct kyrka_packet *pkt, u_int64_t magic, void *udata)
 	case TIER6_ETHER_TYPE_IPV6:
 		break;
 	case TIER6_ETHER_TYPE_HEARTBEAT:
-		peer->alive = t6->now;
+		peer_heartbeat_recv(peer, pkt);
+		return;
+	case TIER6_ETHER_TYPE_DISC_PROBE:
+		peer_discovery_ack(peer);
+		/* FALLTHROUGH */
+	case TIER6_ETHER_TYPE_DISC_ACK:
+		memcpy(&peer->addr, &sender, sizeof(sender));
+
+		if (kyrka_p2p_active(peer->ctx, 1) == -1)
+			fatal("failed to set p2p status");
+
+		tier6_log(LOG_INFO, "[peer=%02x] p2p discovery %s:%u",
+		    peer->id, inet_ntoa(sender.sin_addr),
+		    ntohs(sender.sin_port));
 		return;
 	default:
 		return;
@@ -524,6 +614,8 @@ peer_purgatory_input(struct kyrka_packet *pkt, u_int64_t magic, void *udata)
 			tier6_log(LOG_INFO,
 			    "[peer=%02x] sendto: %s", peer->id, errno_s);
 		}
+	} else {
+		peer->tx_bytes += len;
 	}
 }
 
@@ -562,20 +654,26 @@ peer_kyrka_send(struct kyrka_packet *pkt, u_int64_t magic, void *udata)
 			    "[peer=%02x] sendto: %s (cathedral)",
 			    peer->id, errno_s);
 		}
+	} else {
+		peer->tx_bytes += len;
 	}
 }
 
 /*
- * If needed send a heartbeat packet to our peer, this is mostly done
- * to keep any NAT states alive if we are in P2P mode.
+ * Send a heartbeat packet to our peer if its time to do so. This heartbeat
+ * contains information about our local ip addresses so we can decide if
+ * we somehow want to move traffic to a local connection if we detect
+ * that we can talk to our peer that way.
  */
 static void
-peer_heartbeat(struct tier6_peer *peer)
+peer_heartbeat_send(struct tier6_peer *peer)
 {
+	int			idx;
 	size_t			len;
 	struct kyrka_packet	pkt;
-	struct tier6_ether	*eth;
-	void			*ptr;
+	struct tier6_hb		*hb;
+	struct sockaddr_in	*sin, *mask;
+	struct ifaddrs		*ifa, *ifap;
 
 	PRECOND(peer != NULL);
 
@@ -587,30 +685,242 @@ peer_heartbeat(struct tier6_peer *peer)
 	if (peer->hb_ticks > 0) {
 		peer->hb_ticks--;
 		if (peer->hb_ticks == 0)
-			peer->hb_frequency = 5;
+			peer->hb_frequency = 5000;
 	}
 
-	if ((ptr = kyrka_packet_databuf(peer->ctx, &pkt, &len)) == NULL)
+	if ((hb = kyrka_packet_databuf(peer->ctx, &pkt, &len)) == NULL)
 		fatal("failed to get peer data buffer for heartbeat");
 
-	VERIFY(sizeof(*eth) <= len);
+	VERIFY(sizeof(*hb) <= len);
+	memset(hb, 0, sizeof(*hb));
 
-	eth = ptr;
-	memset(eth, 0, sizeof(*eth));
-	eth->proto = htons(TIER6_ETHER_TYPE_HEARTBEAT);
+	hb->eth.proto = htons(TIER6_ETHER_TYPE_HEARTBEAT);
 
-	pkt.length = sizeof(*eth);
+	if (peer->local_discovery) {
+		idx = 0;
+		hb->port = peer->port;
+
+		if (getifaddrs(&ifap) == -1)
+			fatal("getifaddrs: %s", errno_s);
+
+		for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+			if (idx >= TIER6_HB_IPV4_MAX)
+				break;
+
+			if (!strcmp(ifa->ifa_name, t6->tapname))
+				continue;
+
+			if (t6->bridge != NULL &&
+			    !strcmp(ifa->ifa_name, t6->bridge))
+				continue;
+
+			if (ifa->ifa_addr == NULL)
+				continue;
+
+			if (ifa->ifa_addr->sa_family != AF_INET)
+				continue;
+
+			if (ifa->ifa_flags & (IFF_POINTOPOINT | IFF_LOOPBACK))
+				continue;
+
+			sin = (struct sockaddr_in *)ifa->ifa_addr;
+			mask = (struct sockaddr_in *)ifa->ifa_netmask;
+
+			hb->ips[idx] = sin->sin_addr.s_addr;
+			hb->masks[idx] = mask->sin_addr.s_addr;
+
+			idx++;
+		}
+
+		freeifaddrs(ifap);
+	}
 
 	if (tier6_inet_match(&peer->addr, &peer->cathedral.addr))
 		pkt.shroud = KYRKA_PACKET_SHROUD_CATHEDRAL;
 	else
 		pkt.shroud = KYRKA_PACKET_SHROUD_PEER;
 
+	pkt.length = sizeof(*hb);
+
 	if (kyrka_heaven_input(peer->ctx, &pkt) == -1 &&
 	    kyrka_last_error(peer->ctx) != KYRKA_ERROR_NO_TX_KEY) {
 		tier6_log(LOG_NOTICE, "[peer=%02x] kyrka_heaven_input: %d",
 		    peer->id, kyrka_last_error(peer->ctx));
 	}
+}
+
+/*
+ * We received a heartbeat from our peer, check if we can move to a local
+ * connection if possible and update its alive freshness.
+ */
+static void
+peer_heartbeat_recv(struct tier6_peer *peer, struct kyrka_packet *pkt)
+{
+	int			idx;
+	struct tier6_hb		*hb;
+	struct sockaddr_in	*sin;
+	u_int16_t		proto;
+	struct ifaddrs		*ifap, *ifa;
+	u_int32_t		ip, mask, net;
+
+	PRECOND(peer != NULL);
+	PRECOND(pkt != NULL);
+
+	if (pkt->length != sizeof(*hb)) {
+		tier6_log(LOG_NOTICE, "invalid heartbeat packet of size %zu",
+		    pkt->length);
+		return;
+	}
+
+	hb = kyrka_packet_data(pkt);
+	proto = ntohs(hb->eth.proto);
+	VERIFY(proto == TIER6_ETHER_TYPE_HEARTBEAT);
+
+	peer->alive = t6->now;
+
+	if (peer->local_discovery == 0)
+		return;
+
+	if (hb->port == 0 || hb->ips[0] == 0)
+		return;
+
+	if (getifaddrs(&ifap) == -1)
+		fatal("getifaddrs: %s", errno_s);
+
+	for (idx = 0; idx < TIER6_HB_IPV4_MAX; idx++) {
+		if (hb->ips[idx] == 0)
+			break;
+
+		hb->ips[idx] = ntohl(hb->ips[idx]);
+		hb->masks[idx] = ntohl(hb->masks[idx]);
+
+		for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+			if (!strcmp(ifa->ifa_name, t6->tapname))
+				continue;
+
+			if (ifa->ifa_addr == NULL)
+				continue;
+
+			if (ifa->ifa_addr->sa_family != AF_INET)
+				continue;
+
+			if (ifa->ifa_flags & (IFF_POINTOPOINT | IFF_LOOPBACK))
+				continue;
+
+			sin = (struct sockaddr_in *)ifa->ifa_addr;
+			ip = ntohl(sin->sin_addr.s_addr);
+
+			sin = (struct sockaddr_in *)ifa->ifa_netmask;
+			mask = ntohl(sin->sin_addr.s_addr);
+
+			net = ip & mask;
+			if (net == (hb->ips[idx] & hb->masks[idx]))
+				break;
+		}
+
+		if (ifa != NULL) {
+			hb->ips[idx] = htonl(hb->ips[idx]);
+			peer_discovery_probe(peer, hb->ips[idx], hb->port);
+		}
+	}
+
+	freeifaddrs(ifap);
+}
+
+/*
+ * Send a discovery probe to our potential peer. If it exists there it will
+ * answer with a discovery ack at which point we change peer address.
+ *
+ * This is only used if the cathedral tells us we share the same external
+ * ipv4 address as our peer.
+ */
+static void
+peer_discovery_probe(struct tier6_peer *peer, u_int32_t ip, u_int16_t port)
+{
+	size_t				len;
+	struct kyrka_packet		pkt;
+	struct sockaddr_in		addr;
+	struct tier6_discovery		*disc;
+
+	PRECOND(peer != NULL);
+	PRECOND(ip != 0);
+	PRECOND(port != 0);
+
+	if (peer->addr.sin_addr.s_addr == ip && peer->addr.sin_port == port)
+		return;
+
+	if ((disc = kyrka_packet_databuf(peer->ctx, &pkt, &len)) == NULL)
+		fatal("failed to get peer data buffer for discovery probe");
+
+	VERIFY(sizeof(*disc) <= len);
+	memset(disc, 0, sizeof(*disc));
+
+	disc->eth.proto = htons(TIER6_ETHER_TYPE_DISC_PROBE);
+
+	pkt.length = sizeof(*disc);
+	pkt.shroud = KYRKA_PACKET_SHROUD_PEER;
+
+	/*
+	 * Temporarily override the destination address that is used
+	 * in the peer_purgatory_input() function for sending an
+	 * encrypted packet.
+	 */
+	memcpy(&addr, &peer->addr, sizeof(peer->addr));
+
+	peer->addr.sin_port = port;
+	peer->addr.sin_addr.s_addr = ip;
+
+	if (kyrka_heaven_input(peer->ctx, &pkt) == -1 &&
+	    kyrka_last_error(peer->ctx) != KYRKA_ERROR_NO_TX_KEY) {
+		tier6_log(LOG_NOTICE, "[peer=%02x] kyrka_heaven_input: %d",
+		    peer->id, kyrka_last_error(peer->ctx));
+	}
+
+	/* Restore current peer address. */
+	memcpy(&peer->addr, &addr, sizeof(addr));
+}
+
+/*
+ * Send a discovery ack back to our last sender address to let it know
+ * we are alive and we have successfully received its probe.
+ */
+static void
+peer_discovery_ack(struct tier6_peer *peer)
+{
+	size_t				len;
+	struct kyrka_packet		pkt;
+	struct sockaddr_in		addr;
+	struct tier6_discovery		*disc;
+
+	PRECOND(peer != NULL);
+
+	if ((disc = kyrka_packet_databuf(peer->ctx, &pkt, &len)) == NULL)
+		fatal("failed to get peer data buffer for discovery ack");
+
+	VERIFY(sizeof(*disc) <= len);
+	memset(disc, 0, sizeof(*disc));
+
+	disc->eth.proto = htons(TIER6_ETHER_TYPE_DISC_ACK);
+
+	pkt.length = sizeof(*disc);
+	pkt.shroud = KYRKA_PACKET_SHROUD_PEER;
+
+	/*
+	 * Temporarily override the destination address that is used
+	 * in the peer_purgatory_input() function for sending an
+	 * encrypted packet.
+	 */
+	memcpy(&addr, &peer->addr, sizeof(peer->addr));
+	memcpy(&peer->addr, &sender, sizeof(sender));
+
+	if (kyrka_heaven_input(peer->ctx, &pkt) == -1 &&
+	    kyrka_last_error(peer->ctx) != KYRKA_ERROR_NO_TX_KEY) {
+		tier6_log(LOG_NOTICE, "[peer=%02x] kyrka_heaven_input: %d",
+		    peer->id, kyrka_last_error(peer->ctx));
+	}
+
+	/* Restore current peer address. */
+	memcpy(&peer->addr, &addr, sizeof(addr));
 }
 
 /*
@@ -741,7 +1051,9 @@ peer_cathedral_check(struct tier6_peer *peer)
 	if ((t6->now - peer->cathedral.last) > peer->cathedral.timeout) {
 		tier6_log(LOG_NOTICE,
 		    "[peer=%02x] cathedral timed out (%u)", peer->id,
-		    peer->cathedral.timeout);
+		    peer->cathedral.timeout / 1000);
+
+		peer->cathedral.alive = 0;
 
 		if (peer->addr.sin_addr.s_addr ==
 		    peer->cathedral.addr.sin_addr.s_addr)
@@ -772,4 +1084,10 @@ peer_cathedral_alive(struct tier6_peer *peer)
 
 	peer->cathedral.last = t6->now;
 	peer->cathedral.timeout = TIER6_CATHEDRAL_TIMEOUT;
+
+	if (peer->cathedral.alive == 0) {
+		peer->cathedral.alive = 1;
+		tier6_log(LOG_INFO, "[peer=%02x] cathedral %s is alive",
+		    peer->id, tier6_address(&peer->cathedral.addr));
+	}
 }
