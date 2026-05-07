@@ -182,7 +182,9 @@ struct tier6_peer {
 	int				local_discovery;
 
 	struct sockaddr_in		addr;
+
 	struct tier6_cathedral		cathedral;
+	time_t				cathedral_update;
 
 	u_int64_t			rx_bytes;
 	u_int64_t			tx_bytes;

@@ -51,6 +51,7 @@ static void	peer_discovery_probe(struct tier6_peer *, u_int32_t, u_int16_t);
 static void	peer_mac_prune(struct tier6_peer *);
 static void	peer_cathedral_alive(struct tier6_peer *);
 static void	peer_cathedral_check(struct tier6_peer *);
+static void	peer_cathedral_update(struct tier6_peer *);
 static int	peer_mac_forward(struct tier6_peer *, const u_int8_t *, size_t);
 static void	peer_mac_register(struct tier6_peer *,
 		    const struct tier6_ether *, int);
@@ -129,20 +130,7 @@ tier6_peer_update(void)
 			    peer->id, kyrka_last_error(peer->ctx));
 		}
 
-		if (kyrka_cathedral_notify(peer->ctx) == -1) {
-			tier6_log(LOG_NOTICE,
-			    "[peer=%02x] kyrka_cathedral_notify: %d",
-			    peer->id, kyrka_last_error(peer->ctx));
-		}
-
-		if (t6->flags & TIER6_FLAG_ENABLE_P2P) {
-			if (kyrka_cathedral_nat_detection(peer->ctx) == -1) {
-				tier6_log(LOG_NOTICE, "[peer=%02x] "
-				    "kyrka_cathedral_nat_detection: %d",
-				    peer->id, kyrka_last_error(peer->ctx));
-			}
-		}
-
+		peer_cathedral_update(peer);
 		peer_heartbeat_send(peer);
 		peer_mac_prune(peer);
 	}
@@ -523,9 +511,6 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 					fatal("failed to set p2p status");
 			}
 		}
-		break;
-	case KYRKA_EVENT_REMEMBRANCE_RECEIVED:
-		peer_cathedral_alive(peer);
 		break;
 	default:
 		tier6_log(LOG_NOTICE, "[peer=%02x] unknown event %u",
@@ -1033,6 +1018,34 @@ peer_mac_prune(struct tier6_peer *peer)
 			    mac->addr[3], mac->addr[4], mac->addr[5]);
 			LIST_REMOVE(mac, list);
 			free(mac);
+		}
+	}
+}
+
+/*
+ * Update our cathedral about our presence if required.
+ */
+static void
+peer_cathedral_update(struct tier6_peer *peer)
+{
+	PRECOND(peer != NULL);
+
+	if (t6->now < peer->cathedral_update)
+		return;
+
+	peer->cathedral_update = t6->now + 5000;
+
+	if (kyrka_cathedral_notify(peer->ctx) == -1) {
+		tier6_log(LOG_NOTICE,
+		    "[peer=%02x] kyrka_cathedral_notify: %d",
+		    peer->id, kyrka_last_error(peer->ctx));
+	}
+
+	if (t6->flags & TIER6_FLAG_ENABLE_P2P) {
+		if (kyrka_cathedral_nat_detection(peer->ctx) == -1) {
+			tier6_log(LOG_NOTICE, "[peer=%02x] "
+			    "kyrka_cathedral_nat_detection: %d",
+			    peer->id, kyrka_last_error(peer->ctx));
 		}
 	}
 }
