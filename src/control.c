@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Joris Vink <joris@sanctorum.se>
+ * Copyright (c) 2026 Joris Vink <joris@sanctorum.se>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -146,6 +146,7 @@ static void
 control_request_info(struct sockaddr_un *peer)
 {
 	union tier6_ctl_response	resp;
+	struct tier6_cathedral		cathedral;
 
 	PRECOND(peer != NULL);
 
@@ -154,6 +155,13 @@ control_request_info(struct sockaddr_un *peer)
 	resp.info.flock = t6->flock;
 	resp.info.cs_id = t6->cs_id;
 	resp.info.kek_id = t6->kek_id;
+
+	tier6_discovery_get_cathedral(&cathedral);
+
+	resp.info.cathedral.id = t6->cs_id;
+	resp.info.cathedral.last = cathedral.last;
+	resp.info.cathedral.port = cathedral.addr.sin_port;
+	resp.info.cathedral.ip = cathedral.addr.sin_addr.s_addr;
 
 	if (sendto(fd, &resp, sizeof(resp), 0,
 	    (const struct sockaddr *)peer, sizeof(*peer)) == -1)

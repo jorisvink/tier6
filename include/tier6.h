@@ -164,10 +164,12 @@ struct tier6_mac {
  * A cathedral we are talking to and the last time we heard from it.
  */
 struct tier6_cathedral {
-	int				alive;
-	time_t				last;
-	u_int32_t			timeout;
 	struct sockaddr_in		addr;
+	time_t				last;
+	int				alive;
+	u_int32_t			timeout;
+	u_int64_t			rx_bytes;
+	u_int64_t			tx_bytes;
 };
 
 /*
@@ -249,6 +251,7 @@ void	tier6_control_init(void);
 /* src/discovery.c */
 void	tier6_discovery_init(void);
 void	tier6_discovery_update(void);
+void	tier6_discovery_get_cathedral(struct tier6_cathedral *);
 
 /* src/peer.c */
 void	tier6_peer_init(void);

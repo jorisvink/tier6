@@ -217,16 +217,23 @@ tier6_peer_info(int fd, struct sockaddr_un *addr)
 	PRECOND(addr != NULL);
 
 	LIST_FOREACH(peer, &peers, list) {
+		memset(&resp, 0, sizeof(resp));
+
 		resp.state = 1;
 
-		resp.id = peer->id;
-		resp.last = peer->alive;
+		resp.peer.id = peer->id;
+		resp.peer.last = peer->alive;
+		resp.peer.port = peer->addr.sin_port;
+		resp.peer.ip = peer->addr.sin_addr.s_addr;
 
-		resp.rx_bytes = peer->rx_bytes;
-		resp.tx_bytes = peer->tx_bytes;
+		resp.peer.rx_bytes = peer->rx_bytes;
+		resp.peer.tx_bytes = peer->tx_bytes;
 
-		resp.addr.port = peer->addr.sin_port;
-		resp.addr.ip = peer->addr.sin_addr.s_addr;
+		resp.cathedral.id = t6->cs_id;
+		resp.cathedral.last = peer->cathedral.last;
+
+		resp.cathedral.port = peer->cathedral.addr.sin_port;
+		resp.cathedral.ip = peer->cathedral.addr.sin_addr.s_addr;
 
 		if (sendto(fd, &resp, sizeof(resp), 0,
 		    (const struct sockaddr *)addr, sizeof(*addr)) == -1)
@@ -288,7 +295,6 @@ peer_create(u_int8_t id)
 	memset(&cfg, 0, sizeof(cfg));
 
 	if (t6->remembrance != NULL) {
-		cfg.remembrance = 1;
 		if (tier6_remembrance_cathedral(&peer->cathedral) == -1) {
 			memcpy(&peer->cathedral, &t6->cathedral,
 			    sizeof(t6->cathedral));
@@ -426,10 +432,11 @@ peer_io_read(struct tier6_peer *peer)
 		pkt.length = ret;
 		peer->rx_bytes += ret;
 
-		if (tier6_inet_match(&sender, &peer->cathedral.addr))
+		if (tier6_inet_match(&sender, &peer->cathedral.addr)) {
 			pkt.shroud = KYRKA_PACKET_SHROUD_CATHEDRAL;
-		else
+		} else {
 			pkt.shroud = KYRKA_PACKET_SHROUD_PEER;
+		}
 
 		if (kyrka_purgatory_input(peer->ctx, &pkt) == -1) {
 			tier6_log(LOG_NOTICE,
@@ -476,7 +483,8 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 		in.s_addr = evt->peer.ip;
 		peer_cathedral_alive(peer);
 
-		if (evt->peer.flags & KYRKA_INFO_FLAG_SAME_EXTERNAL_IPV4) {
+		if ((evt->peer.flags & KYRKA_INFO_FLAG_SAME_EXTERNAL_IPV4) &&
+		    (t6->flags & TIER6_FLAG_ENABLE_P2P)) {
 			peer->local_discovery = 1;
 			break;
 		}
