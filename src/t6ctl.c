@@ -45,7 +45,7 @@
 static void	usage(void) __attribute__((noreturn));
 
 static void	ctl_info(int);
-static void	ctl_list_peers(int);
+static void	ctl_status(int);
 static void	ctl_show_stats(struct tier6_ctl_stats *, u_int16_t);
 
 static int	ctl_recv(int, void *, size_t);
@@ -63,7 +63,7 @@ usage(void)
 	printf("    -c <path>  - The control path for the tier6 instance\n");
 	printf("\n");
 	printf("commands:\n");
-	printf("    peers      - Show info on all connected peers\n");
+	printf("    status     - Show current status\n");
 	printf("    whoami     - Show local tier6 configuration\n");
 	exit(1);
 }
@@ -109,8 +109,8 @@ main(int argc, char **argv)
 	if (bind(fd, (const struct sockaddr *)&sun, sizeof(sun)) == -1)
 		err(1, "bind");
 
-	if (!strcmp(argv[0], "peers")) {
-		ctl_list_peers(fd);
+	if (!strcmp(argv[0], "status")) {
+		ctl_status(fd);
 	} else if (!strcmp(argv[0], "whoami")) {
 		ctl_info(fd);
 	} else {
@@ -195,11 +195,11 @@ ctl_recv(int fd, void *data, size_t len)
 }
 
 /*
- * The "peers" command. Display all peer information regarding discovery
+ * The "status" command. Display all peer information regarding discovery
  * and for each tunnel that is running.
  */
 static void
-ctl_list_peers(int fd)
+ctl_status(int fd)
 {
 	struct tier6_ctl_request	req;
 	struct tier6_ctl_peer		peer;
@@ -211,6 +211,11 @@ ctl_list_peers(int fd)
 
 	if (ctl_recv(fd, &resp, sizeof(resp)) == -1)
 		errx(1, "unexpected result from tier6 daemon");
+
+	printf("device\n");
+	printf("  kek-id\t\t%02x\n", resp.info.kek_id);
+	printf("  cathedral-id\t\t%08x\n", resp.info.cs_id);
+	printf("\n");
 
 	printf("discovery\n");
 	ctl_show_stats(&resp.info.cathedral, T6CTL_STAT_CATHEDRAL);
@@ -226,7 +231,8 @@ ctl_list_peers(int fd)
 		if (peer.state == 0)
 			break;
 
-		printf("\ntunnel %02x\n", peer.peer.id);
+		printf("\ntunnel %02x <-> %02x\n",
+		    resp.info.kek_id, peer.peer.id);
 		ctl_show_stats(&peer.peer, T6CTL_STAT_PEER);
 		printf("\n");
 		ctl_show_stats(&peer.cathedral, T6CTL_STAT_CATHEDRAL);
