@@ -277,12 +277,12 @@ ctl_show_stats(struct tier6_ctl_stats *stat, u_int16_t which)
 	}
 
 	printf("  %s\n", prefix);
-	printf("      address\t\t%s:%u\n", inet_ntoa(in), ntohs(stat->port));
+	printf("      ipv4\t\t%s:%u\n", inet_ntoa(in), ntohs(stat->port));
 
 	if (which == T6CTL_STAT_PEER)
-		printf("      rx/tx bytes\t%.2f / %.2f MiB\n", rx, tx);
+		printf("      rx/tx\t\t%.2f / %.2f MiB\n", rx, tx);
 
-	printf("      last seen\t\t%.2f seconds ago\n", last);
+	printf("      last packet\t%.2f seconds ago\n", last);
 }
 
 /*
