@@ -199,6 +199,7 @@ main(int argc, char **argv)
 
 		tier6_peer_update();
 		tier6_discovery_update();
+		tier6_peer_prune();
 	}
 
 	tier6_log(LOG_INFO, "shutting down");

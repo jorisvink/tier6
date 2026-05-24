@@ -248,6 +248,38 @@ tier6_peer_info(int fd, struct sockaddr_un *addr)
 }
 
 /*
+ * Prune all peers marked for removal.
+ */
+void
+tier6_peer_prune(void)
+{
+	u_int8_t		id;
+	struct tier6_mac	*mac;
+	struct tier6_peer	*peer, *next;
+
+	for (peer = LIST_FIRST(&peers); peer != NULL; peer = next) {
+		next = LIST_NEXT(peer, list);
+
+		if (!(peer->flags & TIER6_PEER_FLAG_REMOVE))
+			continue;
+
+		while ((mac = LIST_FIRST(&peer->macs)) != NULL) {
+			LIST_REMOVE(mac, list);
+			free(mac);
+		}
+
+		id = peer->id;
+
+		LIST_REMOVE(peer, list);
+		kyrka_ctx_free(peer->ctx);
+		close(peer->fd);
+		free(peer);
+
+		tier6_log(LOG_INFO, "[peer=%02x] tunnel removed", id);
+	}
+}
+
+/*
  * Create a new tunnel for the given peer and schedule it onto
  * our internal event loop.
  */
@@ -346,15 +378,13 @@ peer_create(u_int8_t id)
 }
 
 /*
- * Delete an existing tunnel for the given peer if the
- * peer is no longer alive.
+ * Mark the given peer as to be removed, but only if the timeout
+ * triggered, in case the peer has trouble talking to cathedrals
+ * but not too us.
  */
 static void
 peer_delete(struct tier6_peer *peer)
 {
-	u_int8_t		id;
-	struct tier6_mac	*mac;
-
 	PRECOND(peer != NULL);
 
 	if ((t6->now - peer->alive) < PEER_ALIVE_TIMEOUT) {
@@ -363,19 +393,8 @@ peer_delete(struct tier6_peer *peer)
 		return;
 	}
 
-	while ((mac = LIST_FIRST(&peer->macs)) != NULL) {
-		LIST_REMOVE(mac, list);
-		free(mac);
-	}
-
-	id = peer->id;
-
-	LIST_REMOVE(peer, list);
-	kyrka_ctx_free(peer->ctx);
-	close(peer->fd);
-	free(peer);
-
-	tier6_log(LOG_INFO, "[peer=%02x] tunnel removed", id);
+	peer->flags |= TIER6_PEER_FLAG_REMOVE;
+	tier6_log(LOG_INFO, "[peer=%02x] tunnel marked for removal", peer->id);
 }
 
 /*

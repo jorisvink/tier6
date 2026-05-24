@@ -175,12 +175,15 @@ struct tier6_cathedral {
 /*
  * A tier6 peer we are talking to.
  */
+#define TIER6_PEER_FLAG_REMOVE		(1 << 0)
+
 struct tier6_peer {
 	struct tier6_io			io;
 
 	int				fd;
 	u_int8_t			id;
 	u_int16_t			port;
+	u_int32_t			flags;
 	int				local_discovery;
 
 	struct sockaddr_in		addr;
@@ -255,6 +258,7 @@ void	tier6_discovery_get_cathedral(struct tier6_cathedral *);
 
 /* src/peer.c */
 void	tier6_peer_init(void);
+void	tier6_peer_prune(void);
 void	tier6_peer_update(void);
 void	tier6_peer_state(u_int8_t, u_int8_t);
 void	tier6_peer_output(const void *, size_t);
