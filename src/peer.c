@@ -387,6 +387,12 @@ peer_delete(struct tier6_peer *peer)
 {
 	PRECOND(peer != NULL);
 
+	if (peer->flags & TIER6_PEER_FLAG_REMOVE) {
+		tier6_log(LOG_INFO,
+		    "[peer=%02x] tunnel already marked for removal", peer->id);
+		return;
+	}
+
 	if ((t6->now - peer->alive) < PEER_ALIVE_TIMEOUT) {
 		tier6_log(LOG_INFO,
 		    "[peer=%02x] tunnel not removed, peer is alive", peer->id);
