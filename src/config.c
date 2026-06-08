@@ -508,7 +508,7 @@ config_build_default_paths(void)
 		len = snprintf(path, sizeof(path),
 		    CONFIG_RELIQUARY_PATH "/id-%08x",
 		    pw->pw_dir, flock, t6->cs_id);
-		if (len == -1 || (size_t)len >= sizeof(path))
+		if (len < 0 || (size_t)len >= sizeof(path))
 			fatal("failed to create cs_path");
 
 		if ((t6->cs_path = strdup(path)) == NULL)
@@ -521,7 +521,7 @@ config_build_default_paths(void)
 		len = snprintf(path, sizeof(path),
 		    CONFIG_RELIQUARY_PATH "/cosk-%08x",
 		    pw->pw_dir, flock, t6->cs_id);
-		if (len == -1 || (size_t)len >= sizeof(path))
+		if (len < 0 || (size_t)len >= sizeof(path))
 			fatal("failed to create cs_path");
 
 		if ((t6->cosk_path = strdup(path)) == NULL)
@@ -534,7 +534,7 @@ config_build_default_paths(void)
 		len = snprintf(path, sizeof(path),
 		    CONFIG_RELIQUARY_PATH "/kek-0x%02x",
 		    pw->pw_dir, flock, t6->kek_id);
-		if (len == -1 || (size_t)len >= sizeof(path))
+		if (len < 0 || (size_t)len >= sizeof(path))
 			fatal("failed to create cs_path");
 
 		if ((t6->kek_path = strdup(path)) == NULL)

@@ -61,7 +61,7 @@ tier6_control_init(void)
 	sun.sun_family = AF_UNIX;
 
 	len = snprintf(sun.sun_path, sizeof(sun.sun_path), "%s", t6->control);
-	if (len == -1 || (size_t)len >= sizeof(sun.sun_path))
+	if (len < 0 || (size_t)len >= sizeof(sun.sun_path))
 		fatal("control path too large");
 
 	if ((fd = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1)

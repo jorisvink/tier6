@@ -135,7 +135,7 @@ ctl_unix_fill(struct sockaddr_un *sun, const char *path)
 	sun->sun_family = AF_UNIX;
 
 	len = snprintf(sun->sun_path, sizeof(sun->sun_path), "%s", path);
-	if (len == -1 || (size_t)len >= sizeof(sun->sun_path))
+	if (len < 0 || (size_t)len >= sizeof(sun->sun_path))
 		errx(1, "socket path '%s' too large", path);
 
 }

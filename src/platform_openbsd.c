@@ -108,7 +108,7 @@ tier6_platform_sandbox(void)
 
 	if (t6->remembrance != NULL) {
 		len = snprintf(tmp, sizeof(tmp), "%s.tmp", t6->remembrance);
-		if (len == -1 || (size_t)len >= sizeof(tmp))
+		if (len < 0 || (size_t)len >= sizeof(tmp))
 			fatal("remembrance path too long");
 
 		if (unveil(tmp, "crw") == -1)
@@ -261,7 +261,7 @@ openbsd_tap_create(void)
 
 	for (idx = 0; idx < 256; idx++) {
 		len = snprintf(path, sizeof(path), "/dev/tap%d", idx);
-		if (len == -1 || (size_t)len >= sizeof(path))
+		if (len < 0 || (size_t)len >= sizeof(path))
 			fatal("/dev/tap%d too long", idx);
 
 		if ((tap_fd = open(path, O_RDWR)) != -1)

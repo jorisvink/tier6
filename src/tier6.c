@@ -320,7 +320,7 @@ tier6_address(struct sockaddr_in *sin)
 
 	len = snprintf(buf, sizeof(buf), "%s:%u",
 	    inet_ntoa(sin->sin_addr), be16toh(sin->sin_port));
-	if (len == -1 || (size_t)len >= sizeof(buf))
+	if (len < 0 || (size_t)len >= sizeof(buf))
 		fatal("failed to create ip:port address string");
 
 	return (buf);
