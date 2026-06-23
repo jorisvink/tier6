@@ -115,6 +115,11 @@ tier6_discovery_init(void)
 		}
 	}
 
+	if (kyrka_mtu_size(liturgy, t6->mtu) == -1) {
+		fatal("failed to set libkyrka mtu size: %d",
+		    kyrka_last_error(liturgy));
+	}
+
 	tier6_log(LOG_INFO,
 	    "discovery running (%s)", tier6_address(&cathedral.addr));
 }

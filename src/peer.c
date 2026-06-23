@@ -371,6 +371,11 @@ peer_create(u_int8_t id)
 		}
 	}
 
+	if (kyrka_mtu_size(peer->ctx, t6->mtu) == -1) {
+		fatal("failed to set libkyrka mtu size: %d",
+		    kyrka_last_error(peer->ctx));
+	}
+
 	LIST_INSERT_HEAD(&peers, peer, list);
 
 	tier6_log(LOG_INFO, "[peer=%02x] tunnel created (%s) (port=%u)", id,
