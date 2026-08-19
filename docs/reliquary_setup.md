@@ -36,9 +36,7 @@ $
 
 ## Tier6 node
 
-Joining a node into a flock is easy.
-
-After joining a node into a flock you will need to approve it
+When joining a node into a flock you will need to approve it
 via the admin computer you used earlier to setup reliquary.
 
 Once the node is approved you need to distribute the correct KEK to the node.
@@ -74,13 +72,15 @@ $
 Copy the indicated KEK from the admin computer in the **t6** directory to
 the node using whatever secure method you prefer.
 
-Once the KEK is on the node, install it on the node:
+Once the KEK is on the node, install it:
 
 ```
 $ ./reliquary-kek-install a36a6bce22675900 01 /path/to/kek-0x01
 The KEK is now installed as kek-0x01 in a36a6bce22675900.
 $
 ```
+
+You can remove the original /path/to/kek once done.
 
 ### Tier6 configuration
 
@@ -93,8 +93,9 @@ kek-id <kek-id>
 cs-id <cs-id>
 flock a36a6bce22675900
 
+shroud yes
 tapname mynet
-cathedral <initial-cathedral>
+cathedral cathedral.reliquary.se:4469
 ```
 
 To figure out the kek-id, cs-id you can run **reliquary-status** on
@@ -107,9 +108,6 @@ Reliquary is initiated.
         kek          01 (ready)
         device-id    c6e64bd8
 ```
-
-To figure out an initial cathedral, select one at random from
-the **reliquary-cathedral-list** command.
 
 ### Running tier6
 
