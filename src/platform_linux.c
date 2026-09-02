@@ -266,7 +266,7 @@ tier6_platform_tap_configure(struct in_addr *addr)
 	memset(&ifr, 0, sizeof(ifr));
 
 	len = snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", t6->tapname);
-	if (len == -1 || (size_t)len >= sizeof(ifr.ifr_name))
+	if (len < 0 || (size_t)len >= sizeof(ifr.ifr_name))
 		fatal("tap interface name '%s' too large", t6->tapname);
 
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
@@ -327,7 +327,7 @@ linux_tap_create(void)
 		fatal("failed to open /dev/net/tun: %s", errno_s);
 
 	len = snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", t6->tapname);
-	if (len == -1 || (size_t)len >= sizeof(ifr.ifr_name))
+	if (len < 0 || (size_t)len >= sizeof(ifr.ifr_name))
 		fatal("tap interface name '%s' too large", t6->tapname);
 
 	if (ioctl(tap_fd, TUNSETIFF, &ifr) == -1) {
@@ -384,7 +384,7 @@ linux_bridge_configure(void)
 	memset(&ifr, 0, sizeof(ifr));
 
 	len = snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", t6->bridge);
-	if (len == -1 || (size_t)len >= sizeof(ifr.ifr_name))
+	if (len < 0 || (size_t)len >= sizeof(ifr.ifr_name))
 		fatal("bridge name '%s' too long", t6->bridge);
 
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)

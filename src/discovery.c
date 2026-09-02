@@ -47,7 +47,7 @@ static struct tier6_io			io;
 static int				fd;
 
 /* The current configured cathedral address. */
-struct tier6_cathedral			cathedral;
+static struct tier6_cathedral		cathedral;
 
 /* Our libkyrka context. */
 static KYRKA				*liturgy;
@@ -115,6 +115,11 @@ tier6_discovery_init(void)
 		}
 	}
 
+	if (kyrka_mtu_size(liturgy, t6->mtu) == -1) {
+		fatal("failed to set libkyrka mtu size: %d",
+		    kyrka_last_error(liturgy));
+	}
+
 	tier6_log(LOG_INFO,
 	    "discovery running (%s)", tier6_address(&cathedral.addr));
 }
@@ -152,6 +157,17 @@ tier6_discovery_update(void)
 		tier6_log(LOG_NOTICE, "discovery kyrka_cathedral_notify: %d",
 		    kyrka_last_error(liturgy));
 	}
+}
+
+/*
+ * Returns the current cathedral in use for discovery.
+ */
+void
+tier6_discovery_get_cathedral(struct tier6_cathedral *cat)
+{
+	PRECOND(cat != NULL);
+
+	memcpy(cat, &cathedral, sizeof(cathedral));
 }
 
 /*

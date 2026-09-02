@@ -164,21 +164,26 @@ struct tier6_mac {
  * A cathedral we are talking to and the last time we heard from it.
  */
 struct tier6_cathedral {
-	int				alive;
-	time_t				last;
-	u_int32_t			timeout;
 	struct sockaddr_in		addr;
+	time_t				last;
+	int				alive;
+	u_int32_t			timeout;
+	u_int64_t			rx_bytes;
+	u_int64_t			tx_bytes;
 };
 
 /*
  * A tier6 peer we are talking to.
  */
+#define TIER6_PEER_FLAG_REMOVE		(1 << 0)
+
 struct tier6_peer {
 	struct tier6_io			io;
 
 	int				fd;
 	u_int8_t			id;
 	u_int16_t			port;
+	u_int32_t			flags;
 	int				local_discovery;
 
 	struct sockaddr_in		addr;
@@ -249,9 +254,11 @@ void	tier6_control_init(void);
 /* src/discovery.c */
 void	tier6_discovery_init(void);
 void	tier6_discovery_update(void);
+void	tier6_discovery_get_cathedral(struct tier6_cathedral *);
 
 /* src/peer.c */
 void	tier6_peer_init(void);
+void	tier6_peer_prune(void);
 void	tier6_peer_update(void);
 void	tier6_peer_state(u_int8_t, u_int8_t);
 void	tier6_peer_output(const void *, size_t);

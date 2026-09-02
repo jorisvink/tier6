@@ -31,33 +31,38 @@ struct tier6_ctl_request {
 } __attribute__((packed));
 
 /*
+ * Statistics for a "peer" or "cathedral".
+ */
+struct tier6_ctl_stats {
+	u_int32_t	id;
+	u_int32_t	ip;
+	u_int16_t	port;
+	time_t		last;
+	u_int64_t	tx_bytes;
+	u_int64_t	rx_bytes;
+};
+
+/*
  * A single peer for a TIER6_CTL_REQUEST_PEER_LIST response.
  * These are sent one by one to the requester, with a last
  * response being indicated by state being set to 0.
  */
 struct tier6_ctl_peer {
-	u_int8_t		id;
-	u_int16_t		state;
-
-	u_int64_t		tx_bytes;
-	u_int64_t		rx_bytes;
-
-	time_t			last;
-
-	struct {
-		u_int32_t	ip;
-		u_int16_t	port;
-	} addr;
-} __attribute__((packed));
+	u_int16_t			state;
+	struct tier6_ctl_stats		peer;
+	struct tier6_ctl_stats		cathedral;
+};
 
 /*
  * A TIER6_CTL_REQUEST_INFO response.
  */
 struct tier6_ctl_info {
-	u_int64_t		flock;
-	u_int32_t		cs_id;
-	u_int8_t		kek_id;
-} __attribute__((packed));
+	u_int64_t			flock;
+	u_int32_t			cs_id;
+	u_int8_t			kek_id;
+
+	struct tier6_ctl_stats		cathedral;
+};
 
 /*
  * The response data structure sent back, which data struct to use
@@ -65,6 +70,6 @@ struct tier6_ctl_info {
  */
 union tier6_ctl_response {
 	struct tier6_ctl_info		info;
-} __attribute__((packed));
+};
 
 #endif

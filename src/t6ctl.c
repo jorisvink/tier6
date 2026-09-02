@@ -33,18 +33,27 @@
 
 #include "tier6_ctl.h"
 
-#define TIER6CTL_CLIENT_SOCKET		"/tmp/tier6ctl.client"
+/*
+ * The type of stats we can dump when received from tier6.
+ */
+#define T6CTL_STAT_CATHEDRAL		1
+#define T6CTL_STAT_PEER			2
+
+/* The path to our client socket. */
+#define T6CTL_CLIENT_SOCKET		"/tmp/tier6ctl.client"
 
 static void	usage(void) __attribute__((noreturn));
 
 static void	ctl_info(int);
-static void	ctl_list_peers(int);
+static void	ctl_status(int);
+static void	ctl_show_stats(struct tier6_ctl_stats *, u_int16_t);
 
 static int	ctl_recv(int, void *, size_t);
 static void	ctl_send(int, struct tier6_ctl_request *);
 static void	ctl_unix_fill(struct sockaddr_un *, const char *);
 
-static const char	*ctlpath;
+/* The control socket we are talking too. */
+static const char	*ctlpath = NULL;
 
 static void
 usage(void)
@@ -54,11 +63,14 @@ usage(void)
 	printf("    -c <path>  - The control path for the tier6 instance\n");
 	printf("\n");
 	printf("commands:\n");
-	printf("    peers      - Show info on all connected peers\n");
+	printf("    status     - Show current status\n");
 	printf("    whoami     - Show local tier6 configuration\n");
 	exit(1);
 }
 
+/*
+ * t6ctl - A tool to display information from the tier6 daemon.
+ */
 int
 main(int argc, char **argv)
 {
@@ -86,19 +98,19 @@ main(int argc, char **argv)
 	if (argc != 1)
 		usage();
 
-	if (unlink(TIER6CTL_CLIENT_SOCKET) == -1 && errno != ENOENT)
+	if (unlink(T6CTL_CLIENT_SOCKET) == -1 && errno != ENOENT)
 		err(1, "failed to remove stale tier6ctl socket");
 
 	if ((fd = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1)
 		err(1, "socket");
 
-	ctl_unix_fill(&sun, TIER6CTL_CLIENT_SOCKET);
+	ctl_unix_fill(&sun, T6CTL_CLIENT_SOCKET);
 
 	if (bind(fd, (const struct sockaddr *)&sun, sizeof(sun)) == -1)
 		err(1, "bind");
 
-	if (!strcmp(argv[0], "peers")) {
-		ctl_list_peers(fd);
+	if (!strcmp(argv[0], "status")) {
+		ctl_status(fd);
 	} else if (!strcmp(argv[0], "whoami")) {
 		ctl_info(fd);
 	} else {
@@ -110,6 +122,9 @@ main(int argc, char **argv)
 	return (0);
 }
 
+/*
+ * Fill in a sockaddr_un with the given path.
+ */
 static void
 ctl_unix_fill(struct sockaddr_un *sun, const char *path)
 {
@@ -120,11 +135,14 @@ ctl_unix_fill(struct sockaddr_un *sun, const char *path)
 	sun->sun_family = AF_UNIX;
 
 	len = snprintf(sun->sun_path, sizeof(sun->sun_path), "%s", path);
-	if (len == -1 || (size_t)len >= sizeof(sun->sun_path))
+	if (len < 0 || (size_t)len >= sizeof(sun->sun_path))
 		errx(1, "socket path '%s' too large", path);
 
 }
 
+/*
+ * Send a request to our tier6 daemon.
+ */
 static void
 ctl_send(int fd, struct tier6_ctl_request *req)
 {
@@ -148,6 +166,10 @@ ctl_send(int fd, struct tier6_ctl_request *req)
 	}
 }
 
+/*
+ * Receive a given amount of bytes from our tier6 daemon. If not
+ * all bytes are received we fatal, returns -1 on EOF.
+ */
 static int
 ctl_recv(int fd, void *data, size_t len)
 {
@@ -172,44 +194,100 @@ ctl_recv(int fd, void *data, size_t len)
 	return (0);
 }
 
+/*
+ * The "status" command. Display all peer information regarding discovery
+ * and for each tunnel that is running.
+ */
 static void
-ctl_list_peers(int fd)
+ctl_status(int fd)
 {
-	struct timespec			ts;
-	struct in_addr			in;
-	time_t				now;
 	struct tier6_ctl_request	req;
 	struct tier6_ctl_peer		peer;
-	float				rx, tx, last;
+	union tier6_ctl_response	resp;
+
+	memset(&req, 0, sizeof(req));
+	req.type = TIER6_CTL_REQUEST_INFO;
+	ctl_send(fd, &req);
+
+	if (ctl_recv(fd, &resp, sizeof(resp)) == -1)
+		errx(1, "unexpected result from tier6 daemon");
+
+	printf("device\n");
+	printf("  kek-id\t\t%02x\n", resp.info.kek_id);
+	printf("  cathedral-id\t\t%08x\n", resp.info.cs_id);
+	printf("\n");
+
+	printf("discovery\n");
+	ctl_show_stats(&resp.info.cathedral, T6CTL_STAT_CATHEDRAL);
 
 	memset(&req, 0, sizeof(req));
 	req.type = TIER6_CTL_REQUEST_PEERS;
-
 	ctl_send(fd, &req);
 
 	for (;;) {
-		ctl_recv(fd, &peer, sizeof(peer));
+		if (ctl_recv(fd, &peer, sizeof(peer)) == -1)
+			errx(1, "unexpected result from tier6 daemon");
 
 		if (peer.state == 0)
 			break;
 
-		(void)clock_gettime(CLOCK_MONOTONIC, &ts);
-		now = ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
-
-		in.s_addr = peer.addr.ip;
-		rx = peer.rx_bytes / 1024.0f / 1024.0f;
-		tx = peer.tx_bytes / 1024.0f / 1024.0f;
-
-		if (peer.last > 0)
-			last = (now - peer.last) / 1000.0f;
-		else
-			last = 0;
-
-		printf("%02x - %.2f %.2f MiB - %.2f sec - %s:%u\n", peer.id,
-		    rx, tx, last, inet_ntoa(in), ntohs(peer.addr.port));
+		printf("\ntunnel %02x <-> %02x\n",
+		    resp.info.kek_id, peer.peer.id);
+		ctl_show_stats(&peer.peer, T6CTL_STAT_PEER);
+		printf("\n");
+		ctl_show_stats(&peer.cathedral, T6CTL_STAT_CATHEDRAL);
 	}
 }
 
+/*
+ * Show stat information for a tier6_ctl_stats. This can be either
+ * a cathedral or a peer, and depending on what it is we show different
+ * type of information.
+ */
+static void
+ctl_show_stats(struct tier6_ctl_stats *stat, u_int16_t which)
+{
+	struct in_addr		in;
+	struct timespec		ts;
+	time_t			now;
+	const char		*prefix;
+	float			rx, tx, last;
+
+	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
+	now = ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
+
+	if (stat->last > 0)
+		last = (now - stat->last) / 1000.0f;
+	else
+		last = 0;
+
+	in.s_addr = stat->ip;
+	rx = stat->rx_bytes / 1024.0f / 1024.0f;
+	tx = stat->tx_bytes / 1024.0f / 1024.0f;
+
+	switch (which) {
+	case T6CTL_STAT_CATHEDRAL:
+		prefix = "using cathedral";
+		break;
+	case T6CTL_STAT_PEER:
+		prefix = "peer";
+		break;
+	default:
+		errx(1, "unknown peer type %d", which);
+	}
+
+	printf("  %s\n", prefix);
+	printf("      ipv4\t\t%s:%u\n", inet_ntoa(in), ntohs(stat->port));
+
+	if (which == T6CTL_STAT_PEER)
+		printf("      rx/tx\t\t%.2f / %.2f MiB\n", rx, tx);
+
+	printf("      last packet\t%.2f seconds ago\n", last);
+}
+
+/*
+ * The "whoami" command, shows basic configuration information.
+ */
 static void
 ctl_info(int fd)
 {

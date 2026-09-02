@@ -217,16 +217,23 @@ tier6_peer_info(int fd, struct sockaddr_un *addr)
 	PRECOND(addr != NULL);
 
 	LIST_FOREACH(peer, &peers, list) {
+		memset(&resp, 0, sizeof(resp));
+
 		resp.state = 1;
 
-		resp.id = peer->id;
-		resp.last = peer->alive;
+		resp.peer.id = peer->id;
+		resp.peer.last = peer->alive;
+		resp.peer.port = peer->addr.sin_port;
+		resp.peer.ip = peer->addr.sin_addr.s_addr;
 
-		resp.rx_bytes = peer->rx_bytes;
-		resp.tx_bytes = peer->tx_bytes;
+		resp.peer.rx_bytes = peer->rx_bytes;
+		resp.peer.tx_bytes = peer->tx_bytes;
 
-		resp.addr.port = peer->addr.sin_port;
-		resp.addr.ip = peer->addr.sin_addr.s_addr;
+		resp.cathedral.id = t6->cs_id;
+		resp.cathedral.last = peer->cathedral.last;
+
+		resp.cathedral.port = peer->cathedral.addr.sin_port;
+		resp.cathedral.ip = peer->cathedral.addr.sin_addr.s_addr;
 
 		if (sendto(fd, &resp, sizeof(resp), 0,
 		    (const struct sockaddr *)addr, sizeof(*addr)) == -1)
@@ -238,6 +245,38 @@ tier6_peer_info(int fd, struct sockaddr_un *addr)
 	if (sendto(fd, &resp, sizeof(resp), 0,
 	    (const struct sockaddr *)addr, sizeof(*addr)) == -1)
 		tier6_log(LOG_NOTICE, "ctl sendto: %s", errno_s);
+}
+
+/*
+ * Prune all peers marked for removal.
+ */
+void
+tier6_peer_prune(void)
+{
+	u_int8_t		id;
+	struct tier6_mac	*mac;
+	struct tier6_peer	*peer, *next;
+
+	for (peer = LIST_FIRST(&peers); peer != NULL; peer = next) {
+		next = LIST_NEXT(peer, list);
+
+		if (!(peer->flags & TIER6_PEER_FLAG_REMOVE))
+			continue;
+
+		while ((mac = LIST_FIRST(&peer->macs)) != NULL) {
+			LIST_REMOVE(mac, list);
+			free(mac);
+		}
+
+		id = peer->id;
+
+		LIST_REMOVE(peer, list);
+		kyrka_ctx_free(peer->ctx);
+		close(peer->fd);
+		free(peer);
+
+		tier6_log(LOG_INFO, "[peer=%02x] tunnel removed", id);
+	}
 }
 
 /*
@@ -288,7 +327,6 @@ peer_create(u_int8_t id)
 	memset(&cfg, 0, sizeof(cfg));
 
 	if (t6->remembrance != NULL) {
-		cfg.remembrance = 1;
 		if (tier6_remembrance_cathedral(&peer->cathedral) == -1) {
 			memcpy(&peer->cathedral, &t6->cathedral,
 			    sizeof(t6->cathedral));
@@ -333,6 +371,11 @@ peer_create(u_int8_t id)
 		}
 	}
 
+	if (kyrka_mtu_size(peer->ctx, t6->mtu) == -1) {
+		fatal("failed to set libkyrka mtu size: %d",
+		    kyrka_last_error(peer->ctx));
+	}
+
 	LIST_INSERT_HEAD(&peers, peer, list);
 
 	tier6_log(LOG_INFO, "[peer=%02x] tunnel created (%s) (port=%u)", id,
@@ -340,16 +383,20 @@ peer_create(u_int8_t id)
 }
 
 /*
- * Delete an existing tunnel for the given peer if the
- * peer is no longer alive.
+ * Mark the given peer as to be removed, but only if the timeout
+ * triggered, in case the peer has trouble talking to cathedrals
+ * but not too us.
  */
 static void
 peer_delete(struct tier6_peer *peer)
 {
-	u_int8_t		id;
-	struct tier6_mac	*mac;
-
 	PRECOND(peer != NULL);
+
+	if (peer->flags & TIER6_PEER_FLAG_REMOVE) {
+		tier6_log(LOG_INFO,
+		    "[peer=%02x] tunnel already marked for removal", peer->id);
+		return;
+	}
 
 	if ((t6->now - peer->alive) < PEER_ALIVE_TIMEOUT) {
 		tier6_log(LOG_INFO,
@@ -357,19 +404,8 @@ peer_delete(struct tier6_peer *peer)
 		return;
 	}
 
-	while ((mac = LIST_FIRST(&peer->macs)) != NULL) {
-		LIST_REMOVE(mac, list);
-		free(mac);
-	}
-
-	id = peer->id;
-
-	LIST_REMOVE(peer, list);
-	kyrka_ctx_free(peer->ctx);
-	close(peer->fd);
-	free(peer);
-
-	tier6_log(LOG_INFO, "[peer=%02x] tunnel removed", id);
+	peer->flags |= TIER6_PEER_FLAG_REMOVE;
+	tier6_log(LOG_INFO, "[peer=%02x] tunnel marked for removal", peer->id);
 }
 
 /*
@@ -426,10 +462,11 @@ peer_io_read(struct tier6_peer *peer)
 		pkt.length = ret;
 		peer->rx_bytes += ret;
 
-		if (tier6_inet_match(&sender, &peer->cathedral.addr))
+		if (tier6_inet_match(&sender, &peer->cathedral.addr)) {
 			pkt.shroud = KYRKA_PACKET_SHROUD_CATHEDRAL;
-		else
+		} else {
 			pkt.shroud = KYRKA_PACKET_SHROUD_PEER;
+		}
 
 		if (kyrka_purgatory_input(peer->ctx, &pkt) == -1) {
 			tier6_log(LOG_NOTICE,
@@ -476,7 +513,8 @@ peer_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 		in.s_addr = evt->peer.ip;
 		peer_cathedral_alive(peer);
 
-		if (evt->peer.flags & KYRKA_INFO_FLAG_SAME_EXTERNAL_IPV4) {
+		if ((evt->peer.flags & KYRKA_INFO_FLAG_SAME_EXTERNAL_IPV4) &&
+		    (t6->flags & TIER6_FLAG_ENABLE_P2P)) {
 			peer->local_discovery = 1;
 			break;
 		}

@@ -108,7 +108,7 @@ tier6_remembrance_save(struct kyrka_event_remembrance *rem)
 	memcpy(&remembrances, rem, sizeof(*rem));
 
 	len = snprintf(tmp, sizeof(tmp), "%s.tmp", t6->remembrance);
-	if (len == -1 || (size_t)len >= sizeof(tmp))
+	if (len < 0 || (size_t)len >= sizeof(tmp))
 		fatal("remembrance path '%s' too big", t6->remembrance);
 
 	if (unlink(tmp) == -1 && errno != ENOENT) {
