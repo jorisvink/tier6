@@ -45,7 +45,7 @@
 #define SECCOMP_AUDIT_ARCH		AUDIT_ARCH_X86_64
 #elif defined(__aarch64__)
 #define SECCOMP_AUDIT_ARCH		AUDIT_ARCH_AARCH64
-#elif defined(__arm)
+#elif defined(__arm) || defined(__arm__)
 #define SECCOMP_AUDIT_ARCH		AUDIT_ARCH_ARM
 #elif defined(__riscv)
 #define SECCOMP_AUDIT_ARCH		AUDIT_ARCH_RISCV64
@@ -128,9 +128,19 @@ static struct sock_filter tier6_seccomp_filter[] = {
 	KORE_SYSCALL_ALLOW(getrandom),
 	KORE_SYSCALL_ALLOW(exit_group),
 	KORE_SYSCALL_ALLOW(rt_sigreturn),
+#if defined(SYS_clock_gettime)
 	KORE_SYSCALL_ALLOW(clock_gettime),
+#endif
+#if defined(SYS_clock_gettime64)
+	KORE_SYSCALL_ALLOW(clock_gettime64),
+#endif
 	KORE_SYSCALL_ALLOW(rt_sigprocmask),
+#if defined(SYS_clock_nanosleep)
 	KORE_SYSCALL_ALLOW(clock_nanosleep),
+#endif
+#if defined(SYS_nanosleep)
+	KORE_SYSCALL_ALLOW(nanosleep),
+#endif
 	KORE_SYSCALL_ALLOW(restart_syscall),
 
 	KORE_SYSCALL_ALLOW_ARG(write, 0, STDOUT_FILENO),
