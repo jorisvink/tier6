@@ -362,8 +362,8 @@ config_parse_cosk_path(char *opt)
 static void
 config_parse_cathedral(char *opt)
 {
-	int			ret;
 	char			*port;
+	int			sig, ret;
 	struct addrinfo		hints, *res, *rp;
 
 	PRECOND(opt != NULL);
@@ -372,25 +372,42 @@ config_parse_cathedral(char *opt)
 		fatal("cathedral <ip:port>");
 
 	*(port)++ = '\0';
-	memset(&hints, 0, sizeof(hints));
 
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_DGRAM;
+	for (;;) {
+		if ((sig = tier6_last_signal()) != -1)
+			fatal("aborted due to signal %d", sig);
 
-	if ((ret = getaddrinfo(opt, port, &hints, &res)) != 0)
-		fatal("cathedral '%s': %s", opt, gai_strerror(ret));
+		memset(&hints, 0, sizeof(hints));
 
-	for (rp = res; rp != NULL; rp = rp->ai_next) {
-		if (rp->ai_family == AF_INET && rp->ai_socktype == SOCK_DGRAM)
-			break;
+		hints.ai_family = AF_INET;
+		hints.ai_socktype = SOCK_DGRAM;
+
+		if ((ret = getaddrinfo(opt, port, &hints, &res)) != 0) {
+			tier6_log(LOG_NOTICE, "failed to resolve: %s: %s",
+			    opt, gai_strerror(ret));
+			sleep(5);
+			continue;
+		}
+
+		for (rp = res; rp != NULL; rp = rp->ai_next) {
+			if (rp->ai_family == AF_INET &&
+			    rp->ai_socktype == SOCK_DGRAM)
+				break;
+		}
+
+		if (rp == NULL) {
+			tier6_log(LOG_NOTICE,
+			    "cathedral '%s' failed to resolve", opt);
+			sleep(5);
+			continue;
+		}
+
+		VERIFY(rp->ai_addrlen == sizeof(t6->cathedral.addr));
+		memcpy(&t6->cathedral.addr, rp->ai_addr, rp->ai_addrlen);
+		freeaddrinfo(res);
+
+		break;
 	}
-
-	if (rp == NULL)
-		fatal("cathedral '%s' failed to resolve", opt);
-
-	VERIFY(rp->ai_addrlen == sizeof(t6->cathedral.addr));
-	memcpy(&t6->cathedral.addr, rp->ai_addr, rp->ai_addrlen);
-	freeaddrinfo(res);
 
 	t6->cathedral.last = 0;
 	t6->cathedral.timeout = 0;
