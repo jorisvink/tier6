@@ -92,7 +92,9 @@ static struct sock_filter tier6_seccomp_filter[] = {
 	KORE_SYSCALL_ALLOW(epoll_wait),
 #endif
 	KORE_SYSCALL_ALLOW(epoll_pwait),
+#if defined(SYS_epoll_pwait2)
 	KORE_SYSCALL_ALLOW(epoll_pwait2),
+#endif
 #if defined(SYS_epoll_create)
 	KORE_SYSCALL_ALLOW(epoll_create),
 #endif
