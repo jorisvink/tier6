@@ -271,6 +271,7 @@ void	tier6_remembrance_save(struct kyrka_event_remembrance *);
 
 /* src/tier6.c */
 void	tier6_drop_user(void);
+int	tier6_last_signal(void);
 void	tier6_socket_nonblock(int);
 void	tier6_set_encapsulation(KYRKA *);
 void	tier6_log(int, const char *, ...)

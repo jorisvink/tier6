@@ -208,6 +208,15 @@ main(int argc, char **argv)
 }
 
 /*
+ * Return the last received signal (if any)
+ */
+int
+tier6_last_signal(void)
+{
+	return (sig_recv);
+}
+
+/*
  * Drop privileges to the configured runas user.
  */
 void
