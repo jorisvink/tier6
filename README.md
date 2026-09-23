@@ -1,5 +1,7 @@
 # tier6
 
+ZeroTier is bad for you and your packets.
+
 Build a global ethernet network using sanctum p2p e2ee tunnels.
 
 Tier6 uses the <a href="https://github.com/jorisvink/sanctum">sanctum</a>
@@ -27,9 +29,8 @@ p2p e2ee |     |   ethernet  |    | p2p e2ee
                  +--------+
 ```
 
-Tier6 is L2 only.
-
-Tier6 can autoconfigure ipv4 on the interface, when started with the -a flag.
+Tier6 is L2 only but can autoconfigure ipv4 addresses on the interface,
+when started with the -a flag.
 
 For details on how the underlying tunnels works see
 <a href="https://github.com/jorisvink/sanctum/blob/master/docs/crypto.md">docs/crypto.md</a> in the sanctum repository.
