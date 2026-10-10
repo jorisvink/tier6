@@ -170,6 +170,7 @@ main(int argc, char **argv)
 	sigdelset(&sigset, SIGINT);
 	sigdelset(&sigset, SIGHUP);
 	sigdelset(&sigset, SIGQUIT);
+	sigdelset(&sigset, SIGSEGV);
 	sigdelset(&sigset, SIGTERM);
 	(void)sigprocmask(SIG_BLOCK, &sigset, NULL);
 
