@@ -331,6 +331,7 @@ openbsd_bridge_configure(void)
 
 	PRECOND(t6->bridge != NULL);
 
+	memset(&ifr, 0, sizeof(ifr));
 	memset(&ifbr, 0, sizeof(ifbr));
 
 	if (strlcpy(ifr.ifr_name, t6->bridge,
@@ -356,7 +357,11 @@ openbsd_bridge_configure(void)
 			fatal("ioctl(SIOCBRDGADD): %s", errno_s);
 	}
 
+	if (ioctl(fd, SIOCGIFFLAGS, &ifr) == -1)
+		fatal("ioctl(SIOCGIFFLAGS): %s", errno_s);
+
 	ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
+
 	if (ioctl(fd, SIOCSIFFLAGS, &ifr) == -1)
 		fatal("ioctl(SIOCSIFFLAGS): %s", errno_s);
 

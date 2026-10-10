@@ -408,7 +408,11 @@ linux_bridge_configure(void)
 			fatal("ioctl(SIOCBRADDBR): %s", errno_s);
 	}
 
+	if (ioctl(fd, SIOCGIFFLAGS, &ifr) == -1)
+		fatal("ioctl(SIOCGIFFLAGS): %s", errno_s);
+
 	ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
+
 	if (ioctl(fd, SIOCSIFFLAGS, &ifr) == -1)
 		fatal("ioctl(SIOCSIFFLAGS): %s", errno_s);
 
