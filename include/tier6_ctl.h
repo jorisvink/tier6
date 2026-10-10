@@ -37,7 +37,7 @@ struct tier6_ctl_stats {
 	u_int32_t	id;
 	u_int32_t	ip;
 	u_int16_t	port;
-	time_t		last;
+	u_int64_t	last;
 	u_int64_t	tx_bytes;
 	u_int64_t	rx_bytes;
 };

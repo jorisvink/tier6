@@ -249,12 +249,12 @@ ctl_show_stats(struct tier6_ctl_stats *stat, u_int16_t which)
 {
 	struct in_addr		in;
 	struct timespec		ts;
-	time_t			now;
+	u_int64_t		now;
 	const char		*prefix;
 	float			rx, tx, last;
 
 	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
-	now = ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
+	now = (u_int64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 
 	if (stat->last > 0)
 		last = (now - stat->last) / 1000.0f;

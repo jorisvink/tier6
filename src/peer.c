@@ -69,7 +69,7 @@ static LIST_HEAD(, tier6_peer)		peers;
 static struct sockaddr_in		sender;
 
 /* The next time we should update all peers. */
-static time_t				next_update;
+static u_int64_t			next_update;
 
 /*
  * Initialise the peer subsystem.

@@ -141,7 +141,7 @@ struct tier6_io {
  * this keeps the code nice and tidy.
  */
 struct tier6_mac {
-	time_t				age;
+	u_int64_t			age;
 	int				fixed;
 	u_int8_t			addr[TIER6_ETHERNET_MAC_LEN];
 
@@ -165,7 +165,7 @@ struct tier6_mac {
  */
 struct tier6_cathedral {
 	struct sockaddr_in		addr;
-	time_t				last;
+	u_int64_t			last;
 	int				alive;
 	u_int32_t			timeout;
 	u_int64_t			rx_bytes;
@@ -189,13 +189,13 @@ struct tier6_peer {
 	struct sockaddr_in		addr;
 
 	struct tier6_cathedral		cathedral;
-	time_t				cathedral_update;
+	u_int64_t			cathedral_update;
 
 	u_int64_t			rx_bytes;
 	u_int64_t			tx_bytes;
 
-	time_t				alive;
-	time_t				hb_next;
+	u_int64_t			alive;
+	u_int64_t			hb_next;
 	u_int32_t			hb_ticks;
 	u_int32_t			hb_frequency;
 
@@ -231,7 +231,7 @@ struct tier6 {
 	char			*kek_path;
 	char			*cosk_path;
 
-	time_t			now;
+	u_int64_t		now;
 
 	struct tier6_cathedral	cathedral;
 };

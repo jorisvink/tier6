@@ -53,7 +53,7 @@ static struct tier6_cathedral		cathedral;
 static KYRKA				*liturgy;
 
 /* The next time we should notify our cathedrals. */
-static time_t				next_notify;
+static u_int64_t			next_notify;
 
 /*
  * Initialise our autodiscovery by creating a socket, setting up
