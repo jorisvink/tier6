@@ -234,13 +234,16 @@ discovery_kyrka_event(KYRKA *ctx, union kyrka_event *evt, void *udata)
 	PRECOND(evt != NULL);
 	PRECOND(udata == NULL);
 
-	cathedral.last = t6->now;
-	cathedral.timeout = TIER6_CATHEDRAL_TIMEOUT;
+	if (evt->type == KYRKA_EVENT_LITURGY_RECEIVED ||
+	    evt->type == KYRKA_EVENT_REMEMBRANCE_RECEIVED) {
+		cathedral.last = t6->now;
+		cathedral.timeout = TIER6_CATHEDRAL_TIMEOUT;
 
-	if (cathedral.alive == 0) {
-		cathedral.alive = 1;
-		tier6_log(LOG_INFO, "discovery cathedral %s is alive",
-		    tier6_address(&cathedral.addr));
+		if (cathedral.alive == 0) {
+			cathedral.alive = 1;
+			tier6_log(LOG_INFO, "discovery cathedral %s is alive",
+			    tier6_address(&cathedral.addr));
+		}
 	}
 
 	switch (evt->type) {
