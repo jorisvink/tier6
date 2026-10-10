@@ -100,6 +100,7 @@ tier6_config(const char *path)
 {
 	FILE		*fp;
 	int		idx;
+	u_int16_t	limit;
 	char		buf[128], *line, *opt;
 
 	PRECOND(path != NULL);
@@ -149,6 +150,17 @@ tier6_config(const char *path)
 			t6->mtu = 1359;
 		else
 			t6->mtu = 1408;
+	} else {
+		if (t6->flags & TIER6_FLAG_SHROUD)
+			limit = 1359;
+		else
+			limit = 1408;
+
+		if (t6->mtu > limit)
+			fatal("mtu may not be set higher than %u", limit);
+
+		if (t6->mtu < KYRKA_MTU_MINIMUM)
+			fatal("mtu cannot be lower than %d", KYRKA_MTU_MINIMUM);
 	}
 
 	if (t6->cathedral.addr.sin_addr.s_addr == 0)
@@ -468,23 +480,12 @@ config_parse_p2p(char *opt)
 static void
 config_parse_mtu(char *opt)
 {
-	u_int16_t	mtu, limit;
+	u_int16_t	mtu;
 
 	PRECOND(opt != NULL);
 
 	if (sscanf(opt, "%hu", &mtu) != 1)
 		fatal("mtu <int> (16-bit number)");
-
-	if (t6->flags & TIER6_FLAG_SHROUD)
-		limit = 1359;
-	else
-		limit = 1408;
-
-	if (mtu > limit)
-		fatal("mtu may not be set higher than %u", limit);
-
-	if (mtu < KYRKA_MTU_MINIMUM)
-		fatal("mtu cannot be lower than %d", KYRKA_MTU_MINIMUM);
 
 	t6->mtu = mtu;
 }
