@@ -101,7 +101,7 @@ tier6_config(const char *path)
 	FILE		*fp;
 	int		idx;
 	u_int16_t	limit;
-	char		buf[128], *line, *opt;
+	char		buf[1024], *line, *opt;
 
 	PRECOND(path != NULL);
 
