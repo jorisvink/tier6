@@ -188,7 +188,7 @@ tier6_remembrance_cathedral(struct tier6_cathedral *cat)
 
 	for (attempts = 0; attempts < KYRKA_CATHEDRALS_MAX; attempts++) {
 		nyfe_random_bytes(&idx, sizeof(idx));
-		idx = idx & (count - 1);
+		idx = idx % count;
 		if (cat->addr.sin_addr.s_addr != remembrances.ips[idx] ||
 		    cat->addr.sin_port != remembrances.ports[idx])
 			break;
